@@ -2,17 +2,16 @@
 
 ## Overview
 
-Servo is designed as a project-based MCP server management system with containerized development environments. The architecture focuses on three core principles:
+Servo is a project-based MCP server management system with containerized development environments:
 
-1. **Project-First Design**: All operations are project-local with complete isolation
-2. **Session-Based Environments**: Multiple isolated environments per project (development, staging, production)
-3. **Automated Configuration**: Zero-config devcontainer generation with service orchestration
+1. **Project-First Design**: Complete project isolation with `.servo/` directories
+2. **Session-Based Environments**: Multiple environments per project (dev, staging, prod)  
+3. **Automated Configuration**: Zero-config devcontainer and client generation
 
 ## Core Components
 
-### 1. Client Plugin System (`clients/`)
-
-The client plugin system provides MCP client integration through a standardized registry interface.
+### Client Plugin System (`clients/`)
+Supports VS Code, Claude Code, and Cursor through a standardized registry interface.
 
 #### Registry Interface
 ```go
@@ -34,7 +33,6 @@ type Client interface {
 - **VS Code**: Updates `.vscode/mcp.json` with MCP server configurations
 - **Claude Code**: Updates `.mcp.json` with server configurations
 - **Cursor**: Updates `.cursor/settings.json` with MCP configurations
-- **CrewAI**: Updates `.crewai/mcp.json` with server configurations
 
 ### 2. Project Session Management (`internal/project/`, `internal/session/`)
 
@@ -405,7 +403,7 @@ Error messages are designed to be actionable and help users resolve issues.
 ### Current Implementation
 - ✅ **Project Management**: Complete project-local isolation
 - ✅ **Session Support**: Multiple environments per project
-- ✅ **MCP Client Integration**: VS Code, Claude Code, Cursor, CrewAI
+- ✅ **MCP Client Integration**: VS Code, Claude Code, Cursor
 - ✅ **Secrets Management**: AES-256-GCM encryption with PBKDF2
 - ✅ **Git Authentication**: SSH keys, HTTP tokens, credentials
 - ✅ **Devcontainer Generation**: Automatic runtime feature detection

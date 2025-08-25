@@ -1,10 +1,8 @@
 # Servo Project Directory Structure
 
-This document provides a comprehensive overview of the `.servo` project directory structure and explains what each component does in the Servo MCP Server Package Manager.
-
 ## Overview
 
-Each Servo project contains a `.servo` directory that manages all project-specific configurations, sessions, and MCP server installations. This project-based approach ensures complete isolation and portability of development environments.
+Each Servo project contains a `.servo` directory that manages all project-specific configurations, sessions, and MCP server installations.
 
 ## Directory Structure
 
@@ -14,40 +12,67 @@ my-project/
 │   ├── project.yaml          # Project configuration and server declarations
 │   ├── secrets.yaml          # Base64-encoded secrets (local only)
 │   ├── .gitignore           # Excludes secrets and volumes
-│   ├── config/               # Project-level configuration overrides
 │   └── sessions/             # Project sessions
-│       ├── default/          # Default session (created automatically)
+│       ├── default/          # Default session
 │       │   ├── manifests/    # Downloaded .servo file definitions
-│       │   │   ├── graphiti.servo      # Graphiti server definition
-│       │   │   └── playwright.servo    # Playwright server definition
-│       │   ├── config/       # Session-specific configuration overrides
-│       │   └── volumes/      # Session-specific Docker volumes (gitignored)
-│       │       ├── graphiti/ # Graphiti service volumes
-│       │       └── playwright/ # Playwright service volumes
-│       ├── development/      # Development session
-│       │   ├── manifests/    # Development server definitions
-│       │   ├── config/       # Development configurations
-│       │   └── volumes/      # Development Docker volumes
-│       └── production/       # Production session
-│           ├── manifests/    # Production server definitions
-│           ├── config/       # Production configurations
-│           └── volumes/      # Production Docker volumes
+│       │   └── volumes/      # Docker volumes (gitignored)
+│       └── development/      # Development session
+│           ├── manifests/    # Development server definitions
+│           └── volumes/      # Development Docker volumes
 ├── .vscode/                  # VS Code configuration
-│   └── mcp.json             # VS Code MCP server configuration
+│   └── settings.json         # VS Code MCP server configuration
 ├── .devcontainer/           # Generated development container
-│   ├── devcontainer.json    # Dev container configuration with runtime features
+│   ├── devcontainer.json    # Dev container configuration
 │   └── docker-compose.yml   # Service dependencies
 └── .mcp.json                # Claude Code MCP configuration
 ```
 
-## Component Details
+## Key Files
 
 ### Project Configuration (`.servo/project.yaml`)
-
-The main project configuration file containing project metadata and MCP server declarations:
-
 ```yaml
-# From the Project type in internal/project/manager.go
+clients: ["vscode", "claude-code", "cursor"]
+default_session: default
+active_session: development
+mcp_servers:
+  - name: "graphiti"
+    source: "https://github.com/getzep/graphiti.git"
+required_secrets:
+  - name: "openai_api_key"
+```
+
+### Base64-Encoded Secrets (`.servo/secrets.yaml`)
+```yaml
+version: "1.0"
+secrets:
+  openai_api_key: "c2stMTIzNDU2Nzg5MGFiY2RlZg=="  # base64 encoded
+```
+
+### Session Structure
+Each session contains:
+- `manifests/` - Downloaded .servo files
+- `volumes/` - Docker service volumes (gitignored)
+
+## Generated Files
+
+### VS Code Configuration (`.vscode/settings.json`)
+Contains MCP server definitions for VS Code.
+
+### Claude Code Configuration (`.mcp.json`)
+Contains MCP server definitions for Claude Code.
+
+### Development Container (`.devcontainer/`)
+Auto-generated devcontainer configuration with runtime features and service dependencies.
+
+## Version Control
+
+**Commit these:**
+- `.servo/project.yaml` - Project configuration
+- `.servo/sessions/*/manifests/` - Server definitions
+
+**Never commit:**
+- `.servo/secrets.yaml` - Secrets (automatically gitignored)
+- `.servo/sessions/*/volumes/` - Docker volumes (gitignored)
 clients: ["vscode", "claude-code", "cursor"]
 default_session: default
 active_session: development

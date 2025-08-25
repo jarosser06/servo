@@ -333,7 +333,7 @@ clients:
 ```yaml
 clients:
   recommended: ["vscode", "claude-code", "cursor"]
-  tested: ["vscode", "claude-code", "cursor", "crewai"]
+  tested: ["vscode", "claude-code", "cursor"]
   excluded: ["legacy-client"]
   requirements:
     vscode:
@@ -579,7 +579,7 @@ server:
 
 clients:
   recommended: ["vscode", "claude-code", "cursor"]
-  tested: ["vscode", "claude-code", "cursor", "crewai"]
+  tested: ["vscode", "claude-code", "cursor"]
   requirements:
     vscode:
       minimum_version: "1.85.0"
