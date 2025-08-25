@@ -23,7 +23,7 @@ func TestApp_Creation(t *testing.T) {
 	}
 
 	// Test that required commands are present
-	requiredCommands := []string{"init", "install", "status", "work", "validate", "clients", "config", "secrets"}
+	requiredCommands := []string{"init", "install", "status", "work", "validate", "client", "config", "secrets"}
 	for _, cmdName := range requiredCommands {
 		found := false
 		for _, cmd := range app.Commands {
@@ -103,7 +103,7 @@ func TestApp_CommandCount(t *testing.T) {
 	}
 
 	// Count expected commands (should be at least the core ones)
-	expectedMinCommands := 8 // init, install, status, work, validate, clients, config, secrets
+	expectedMinCommands := 8 // init, install, status, work, validate, client, config, secrets
 	if len(app.Commands) < expectedMinCommands {
 		t.Errorf("Expected at least %d commands, got %d", expectedMinCommands, len(app.Commands))
 	}
@@ -152,5 +152,172 @@ func TestApp_FlagValidation(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestApp_ClientCommand(t *testing.T) {
+	// Create test app
+	app, err := NewApp("test-version")
+	if err != nil {
+		t.Fatalf("Failed to create app: %v", err)
+	}
+
+	// Find client command
+	var clientCmd *cli.Command
+	for _, cmd := range app.Commands {
+		if cmd.Name == "client" {
+			clientCmd = cmd
+			break
+		}
+	}
+
+	if clientCmd == nil {
+		t.Fatal("Client command not found")
+	}
+
+	// Verify client command structure
+	if clientCmd.Usage != "Manage MCP client support for this project" {
+		t.Errorf("Expected client command usage to be 'Manage MCP client support for this project', got '%s'", clientCmd.Usage)
+	}
+
+	// Verify required subcommands are present
+	requiredSubcommands := []string{"list", "enable", "disable"}
+	for _, subcmdName := range requiredSubcommands {
+		found := false
+		for _, subcmd := range clientCmd.Subcommands {
+			if subcmd.Name == subcmdName {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Required subcommand '%s' not found in client command", subcmdName)
+		}
+	}
+
+	// Verify subcommand structure
+	for _, subcmd := range clientCmd.Subcommands {
+		if subcmd.Name == "" {
+			t.Error("Client subcommand missing name")
+		}
+		if subcmd.Usage == "" {
+			t.Errorf("Client subcommand '%s' missing usage", subcmd.Name)
+		}
+		if subcmd.Action == nil {
+			t.Errorf("Client subcommand '%s' missing action", subcmd.Name)
+		}
+	}
+}
+
+func TestApp_ClientEnableCommand(t *testing.T) {
+	// Create test app
+	app, err := NewApp("test-version")
+	if err != nil {
+		t.Fatalf("Failed to create app: %v", err)
+	}
+
+	// Find client command and enable subcommand
+	var enableCmd *cli.Command
+	for _, cmd := range app.Commands {
+		if cmd.Name == "client" {
+			for _, subcmd := range cmd.Subcommands {
+				if subcmd.Name == "enable" {
+					enableCmd = subcmd
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if enableCmd == nil {
+		t.Fatal("Client enable command not found")
+	}
+
+	// Verify enable command structure
+	if enableCmd.Usage != "Enable support for one or more clients in the current project" {
+		t.Errorf("Expected enable command usage to describe enabling clients, got '%s'", enableCmd.Usage)
+	}
+
+	if enableCmd.ArgsUsage != "<client> [<client> ...]" {
+		t.Errorf("Expected enable command args usage to be '<client> [<client> ...]', got '%s'", enableCmd.ArgsUsage)
+	}
+
+	if enableCmd.Action == nil {
+		t.Error("Enable command missing action")
+	}
+}
+
+func TestApp_ClientDisableCommand(t *testing.T) {
+	// Create test app
+	app, err := NewApp("test-version")
+	if err != nil {
+		t.Fatalf("Failed to create app: %v", err)
+	}
+
+	// Find client command and disable subcommand
+	var disableCmd *cli.Command
+	for _, cmd := range app.Commands {
+		if cmd.Name == "client" {
+			for _, subcmd := range cmd.Subcommands {
+				if subcmd.Name == "disable" {
+					disableCmd = subcmd
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if disableCmd == nil {
+		t.Fatal("Client disable command not found")
+	}
+
+	// Verify disable command structure
+	if disableCmd.Usage != "Disable support for one or more clients in the current project" {
+		t.Errorf("Expected disable command usage to describe disabling clients, got '%s'", disableCmd.Usage)
+	}
+
+	if disableCmd.ArgsUsage != "<client> [<client> ...]" {
+		t.Errorf("Expected disable command args usage to be '<client> [<client> ...]', got '%s'", disableCmd.ArgsUsage)
+	}
+
+	if disableCmd.Action == nil {
+		t.Error("Disable command missing action")
+	}
+}
+
+func TestApp_ClientListCommand(t *testing.T) {
+	// Create test app
+	app, err := NewApp("test-version")
+	if err != nil {
+		t.Fatalf("Failed to create app: %v", err)
+	}
+
+	// Find client command and list subcommand
+	var listCmd *cli.Command
+	for _, cmd := range app.Commands {
+		if cmd.Name == "client" {
+			for _, subcmd := range cmd.Subcommands {
+				if subcmd.Name == "list" {
+					listCmd = subcmd
+					break
+				}
+			}
+			break
+		}
+	}
+
+	if listCmd == nil {
+		t.Fatal("Client list command not found")
+	}
+
+	// Verify list command structure
+	if listCmd.Usage != "List available MCP clients" {
+		t.Errorf("Expected list command usage to describe listing clients, got '%s'", listCmd.Usage)
+	}
+
+	if listCmd.Action == nil {
+		t.Error("List command missing action")
 	}
 }

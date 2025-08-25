@@ -805,15 +805,15 @@ servo secrets import /backup/production-secrets.yaml
 
 ## Client Management
 
-Manage MCP client detection and integration.
+Manage MCP client support for the current project.
 
-### `servo clients list`
+### `servo client list`
 
 List all available MCP clients with their detection and configuration status.
 
 **Syntax:**
 ```bash
-servo clients list
+servo client list
 ```
 
 **No options or arguments.**
@@ -826,18 +826,108 @@ NAME            INSTALLED  DESCRIPTION
 vscode          Yes        Visual Studio Code MCP integration
 claude-code     Yes        Claude Code desktop application
 cursor          No         Cursor AI code editor
-crewai          No         CrewAI framework integration
 ```
 
 **Detection Methods:**
 - **VS Code:** Check for `code` command and `.vscode` directory support
 - **Claude Code:** Check for Claude Code installation and config support
 - **Cursor:** Check for `cursor` command availability
-- **CrewAI:** Check for CrewAI framework installation
 
 **Exit Codes:**
 - `0` - Success
 - `1` - Any error (client detection failed, etc.)
+
+### `servo client enable`
+
+Enable support for one or more MCP clients in the current project.
+
+**Syntax:**
+```bash
+servo client enable <CLIENT> [<CLIENT> ...]
+```
+
+**Arguments:**
+- `CLIENT` - Name of MCP client to enable (required, multiple allowed)
+
+**Supported Clients:**
+- `vscode` - Visual Studio Code
+- `claude-code` - Claude Code
+- `cursor` - Cursor Editor
+
+**Examples:**
+```bash
+# Enable single client
+servo client enable vscode
+
+# Enable multiple clients
+servo client enable vscode claude-code cursor
+
+# Enable all clients
+servo client enable vscode claude-code cursor
+```
+
+**Output Examples:**
+```bash
+✅ Enabled client(s): [vscode claude-code]
+⚠️  Already enabled: [cursor]
+❌ Failed to enable: [invalid-client (client 'invalid-client' not supported)]
+```
+
+**Project Impact:**
+- Updates `project.yaml` with enabled clients
+- Clients will be configured when running `servo work`
+- Client-specific configuration files will be generated
+
+**Exit Codes:**
+- `0` - Success (at least one client enabled or already enabled)
+- `1` - All clients failed to enable
+- `3` - Not in a project directory
+
+### `servo client disable`
+
+Disable support for one or more MCP clients in the current project.
+
+**Syntax:**
+```bash
+servo client disable <CLIENT> [<CLIENT> ...]
+```
+
+**Arguments:**
+- `CLIENT` - Name of MCP client to disable (required, multiple allowed)
+
+**Supported Clients:**
+- `vscode` - Visual Studio Code
+- `claude-code` - Claude Code
+- `cursor` - Cursor Editor
+
+**Examples:**
+```bash
+# Disable single client
+servo client disable cursor
+
+# Disable multiple clients
+servo client disable vscode claude-code
+
+# Disable all clients (not recommended)
+servo client disable vscode claude-code cursor
+```
+
+**Output Examples:**
+```bash
+✅ Disabled client(s): [cursor]
+⚠️  Not enabled: [vscode]
+❌ Failed to disable: [invalid-client (client 'invalid-client' not found in project)]
+```
+
+**Project Impact:**
+- Updates `project.yaml` removing disabled clients
+- Client will no longer be configured when running `servo work`
+- Existing client configuration files remain unchanged
+
+**Exit Codes:**
+- `0` - Success (at least one client disabled or already disabled)
+- `1` - All clients failed to disable
+- `3` - Not in a project directory
 
 ## Validation
 

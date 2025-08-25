@@ -360,26 +360,102 @@ func NewApp(version string) (*cli.App, error) {
 			},
 
 			{
-				Name:        "clients",
-				Usage:       "Manage MCP clients",
-				Description: "List and manage MCP client installations",
+				Name:        "client",
+				Usage:       "Manage MCP client support for this project",
+				Description: "Enable or disable MCP client support for the current project, and list available clients.",
 				Subcommands: []*cli.Command{
 					{
 						Name:  "list",
 						Usage: "List available MCP clients",
 						Action: func(c *cli.Context) error {
-							// Simple client listing without scope manager dependency
 							clients := clientRegistry.List()
 							fmt.Printf("Available Clients:\n")
 							fmt.Printf("%-15s %-10s %s\n", "NAME", "INSTALLED", "DESCRIPTION")
 							fmt.Printf("%-15s %-10s %s\n", "----", "---------", "-----------")
-
 							for _, client := range clients {
 								installed := "No"
 								if client.IsInstalled() {
 									installed = "Yes"
 								}
 								fmt.Printf("%-15s %-10s %s\n", client.Name(), installed, client.Description())
+							}
+							return nil
+						},
+					},
+					{
+						Name:      "enable",
+						Usage:     "Enable support for one or more clients in the current project",
+						ArgsUsage: "<client> [<client> ...]",
+						Action: func(c *cli.Context) error {
+							if !projectManager.IsProject() {
+								return fmt.Errorf("not in a servo project directory")
+							}
+							if c.NArg() == 0 {
+								return fmt.Errorf("at least one client name required (e.g. vscode, claude-code, cursor)")
+							}
+							var enabled []string
+							var already []string
+							var failed []string
+							for i := 0; i < c.NArg(); i++ {
+								clientName := c.Args().Get(i)
+								err := projectManager.AddClient(clientName)
+								if err != nil {
+									if err.Error() == fmt.Sprintf("client '%s' already configured", clientName) {
+										already = append(already, clientName)
+									} else {
+										failed = append(failed, fmt.Sprintf("%s (%v)", clientName, err))
+									}
+								} else {
+									enabled = append(enabled, clientName)
+								}
+							}
+							if len(enabled) > 0 {
+								fmt.Printf("✅ Enabled client(s): %s\n", enabled)
+							}
+							if len(already) > 0 {
+								fmt.Printf("⚠️  Already enabled: %s\n", already)
+							}
+							if len(failed) > 0 {
+								fmt.Printf("❌ Failed to enable: %s\n", failed)
+							}
+							return nil
+						},
+					},
+					{
+						Name:      "disable",
+						Usage:     "Disable support for one or more clients in the current project",
+						ArgsUsage: "<client> [<client> ...]",
+						Action: func(c *cli.Context) error {
+							if !projectManager.IsProject() {
+								return fmt.Errorf("not in a servo project directory")
+							}
+							if c.NArg() == 0 {
+								return fmt.Errorf("at least one client name required (e.g. vscode, claude-code, cursor)")
+							}
+							var disabled []string
+							var notfound []string
+							var failed []string
+							for i := 0; i < c.NArg(); i++ {
+								clientName := c.Args().Get(i)
+								err := projectManager.RemoveClient(clientName)
+								if err != nil {
+									if err.Error() == fmt.Sprintf("client '%s' not found in project", clientName) {
+										notfound = append(notfound, clientName)
+									} else {
+										failed = append(failed, fmt.Sprintf("%s (%v)", clientName, err))
+									}
+								} else {
+									disabled = append(disabled, clientName)
+								}
+							}
+							if len(disabled) > 0 {
+								fmt.Printf("✅ Disabled client(s): %s\n", disabled)
+							}
+							if len(notfound) > 0 {
+								fmt.Printf("⚠️  Not enabled: %s\n", notfound)
+							}
+							if len(failed) > 0 {
+								fmt.Printf("❌ Failed to disable: %s\n", failed)
 							}
 							return nil
 						},

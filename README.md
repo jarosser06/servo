@@ -11,13 +11,13 @@ Servo is a command-line tool that simplifies managing Model Context Protocol (MC
 ### 🏗️ **Project Isolation** - Complete Development Environment Management
 - **Directory-based projects**: Each project runs in its own `.servo/` directory with independent servers and dependencies
 - **Containerized by default**: Projects run in isolated Docker environments with automatic devcontainer generation
-- **Session support**: Multiple isolated environments per project (development, staging, production)
+- **Session support**: Multiple isolated environments per project (web_dev, dba, cloud_infra)
 - **Team collaboration**: Project configs are git-friendly with declarative secrets (values stored locally)
-- **Client integration**: Automatically configures VS Code, Claude Code, and Cursor
+- **Client integration**: Automatically configures for VS Code, Claude Code, and Cursor
 
 ### 🔧 **Automated Configuration** - Zero-Config Development Workflows
 - **Devcontainer generation**: Automatically generates `.devcontainer/devcontainer.json` with runtime features
-- **Docker Compose orchestration**: Manages service dependencies from .servo file definitions  
+- **Docker Compose orchestration**: Manages service dependencies from .servo file definitions
 - **MCP client configuration**: Updates client-specific settings for seamless MCP server access
 - **Secret management**: base64-encoded secrets with team-friendly workflows
 
@@ -362,12 +362,32 @@ servo secrets import <INPUT_FILE>
 
 ### Client Management
 
-#### `servo clients list`
+#### `servo client list`
 List all available MCP clients and their installation status.
 
 ```bash
-servo clients list
+servo client list
 ```
+
+#### `servo client enable`
+Enable support for one or more MCP clients in the current project.
+
+```bash
+servo client enable <CLIENT> [<CLIENT> ...]
+```
+
+**Arguments:**
+- `CLIENT` - Name of MCP client to enable (vscode, claude-code, cursor)
+
+#### `servo client disable`
+Disable support for one or more MCP clients in the current project.
+
+```bash
+servo client disable <CLIENT> [<CLIENT> ...]
+```
+
+**Arguments:**
+- `CLIENT` - Name of MCP client to disable (vscode, claude-code, cursor)
 
 **Output:**
 - Client names
@@ -566,35 +586,6 @@ servo validate ./new-server.servo     # Validate new servers
 | VS Code | ✅ | `.vscode/mcp.json` | ✅ |
 | Claude Code | ✅ | `.mcp.json` | ✅ |  
 | Cursor | ✅ | `.cursor/mcp.json` | ✅ |
-
-## Common Use Cases
-
-### Data Science Projects
-```bash
-servo init data-project --clients vscode,claude-code
-servo install jupyter-mcp-server.servo
-servo install pandas-analytics.servo
-servo secrets set openai_api_key sk-...
-servo work
-```
-
-### Web Development
-```bash  
-servo init web-app --session development
-servo install typescript-analyzer.servo
-servo install database-client.servo  
-servo secrets set database_url postgres://...
-servo work --client cursor
-```
-
-### AI/ML Development
-```bash
-servo init ml-project
-servo install model-server.servo --clients vscode
-servo install vector-db.servo
-servo secrets set huggingface_token hf_...
-servo work
-```
 
 ## Contributing
 
