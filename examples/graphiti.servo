@@ -1,0 +1,82 @@
+servo_version: "1.0"
+name: "graphiti"
+version: "1.2.0"
+description: "Temporal knowledge graphs with weighted relationships"
+author: "Zep <team@getzep.com>"
+license: "MIT"
+metadata:
+  homepage: "https://github.com/getzep/graphiti"
+  repository: "https://github.com/getzep/graphiti.git"
+  tags: ["knowledge-graph", "temporal", "neo4j", "memory"]
+
+requirements:
+  runtimes:
+    - name: "python"
+      version: ">=3.10"
+    - name: "uv"
+      version: "latest"
+
+install:
+  type: "git"
+  method: "git"
+  repository: "https://github.com/getzep/graphiti.git"
+  subdirectory: "mcp_server"
+  setup_commands:
+    - "uv sync"
+    - "uv run pip install -e ."
+
+dependencies:
+  services:
+    neo4j:
+      image: "neo4j:5.13"
+      ports: ["7687"]
+      environment:
+        NEO4J_AUTH: "neo4j/{{.Password}}"
+        NEO4J_PLUGINS: '["apoc"]'
+      volumes:
+        - "{{.DataPath}}:/data"
+        - "{{.LogsPath}}:/logs"
+      healthcheck:
+        test: ["CMD-SHELL", "cypher-shell 'RETURN 1'"]
+        interval: 30s
+        timeout: 10s
+        retries: 3
+      auto_generate_password: true
+      shared: false
+
+configuration_schema:
+  secrets:
+    openai_api_key:
+      description: "OpenAI API key for embeddings"
+      type: "api_key"
+      required: true
+      validation: "^sk-[a-zA-Z0-9]{20,}$"
+      prompt: "Enter your OpenAI API key (starts with sk-)"
+      env_var: "OPENAI_API_KEY"
+  config:
+    model_name:
+      description: "OpenAI model for embeddings"
+      type: "select"
+      required: false
+      default: "gpt-4o-mini"
+      options: ["gpt-4o-mini", "gpt-4o", "text-embedding-3-small"]
+      env_var: "MODEL_NAME"
+
+server:
+  transport: "stdio"
+  command: "{{.RuntimePath.uv}}"
+  args:
+    - "run"
+    - "--directory={{.InstallPath}}"
+    - "graphiti_mcp_server.py"
+    - "--transport={{.Transport}}"
+  environment:
+    NEO4J_URI: "{{.Services.neo4j.uri}}"
+    NEO4J_USER: "{{.Services.neo4j.user}}"
+    NEO4J_PASSWORD: "{{.Services.neo4j.password}}"
+    OPENAI_API_KEY: "{{.Secrets.openai_api_key}}"
+    MODEL_NAME: "{{.Config.model_name}}"
+
+clients:
+  recommended: ["claude-desktop", "vscode", "cursor"]
+  tested: ["claude-desktop", "vscode", "cursor", "claude-code"]

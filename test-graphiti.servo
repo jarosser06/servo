@@ -1,0 +1,79 @@
+servo_version: "1.0"
+name: "graphiti-mcp"
+version: "1.0.0" 
+description: "Graphiti MCP Server - Memory management for AI agents"
+author: "Zep AI"
+license: "MIT"
+
+metadata:
+  homepage: "https://github.com/getzep/graphiti"
+  repository: "https://github.com/getzep/graphiti.git"
+
+install:
+  type: "git"
+  method: "git"
+  repository: "https://github.com/getzep/graphiti.git"
+  setup_commands:
+    - "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    - "export PATH=\"$HOME/.local/bin:$PATH\""
+    - "uv sync"
+
+server:
+  transport: "stdio"
+  command: "uv"
+  args: ["run", "mcp_server/graphiti_mcp_server.py"]
+  environment:
+    NEO4J_URI: "${NEO4J_URI}"
+    NEO4J_USER: "${NEO4J_USER}" 
+    NEO4J_PASSWORD: "${NEO4J_PASSWORD}"
+    OPENAI_API_KEY: "${OPENAI_API_KEY}"
+
+# Docker services required
+services:
+  neo4j:
+    image: "neo4j:5.13"
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: "neo4j/${NEO4J_PASSWORD}"
+      NEO4J_PLUGINS: '["apoc"]'
+      NEO4J_ACCEPT_LICENSE_AGREEMENT: "yes"
+    volumes:
+      - "neo4j_data:/data"
+      - "neo4j_logs:/logs"
+    healthcheck:
+      test: ["CMD-SHELL", "cypher-shell -u neo4j -p ${NEO4J_PASSWORD} 'RETURN 1'"]
+      interval: "30s"
+      timeout: "10s"
+      retries: 3
+
+configuration_schema:
+  secrets:
+    NEO4J_PASSWORD:
+      description: "Password for Neo4j database"
+      type: "password"
+      env_var: "NEO4J_PASSWORD"
+    OPENAI_API_KEY:
+      description: "OpenAI API key for LLM operations"
+      type: "password"
+      env_var: "OPENAI_API_KEY"
+  config:
+    NEO4J_URI:
+      description: "Neo4j connection URI"
+      type: "string"
+      default: "bolt://localhost:7687"
+      env_var: "NEO4J_URI"
+    NEO4J_USER:
+      description: "Neo4j username"
+      type: "string"  
+      default: "neo4j"
+      env_var: "NEO4J_USER"
+
+clients:
+  recommended: ["claude-code", "vscode", "claude-desktop"]
+  tested: ["claude-code", "vscode"]
+
+system_requirements:
+  python: ">=3.8"
+  docker: ">=20.0"
