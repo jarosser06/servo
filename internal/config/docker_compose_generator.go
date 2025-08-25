@@ -51,7 +51,9 @@ func (g *DockerComposeGenerator) Generate() error {
 
 	// Build the complete configuration through staged composition
 	dockerComposeConfig := g.buildBaseDockerComposeConfig()
-	g.addServicesFromManifests(dockerComposeConfig, manifests)
+	if err := g.addServicesFromManifests(dockerComposeConfig, manifests); err != nil {
+		return fmt.Errorf("failed to add services from manifests: %w", err)
+	}
 	finalConfig := g.processDockerComposeOverrides(dockerComposeConfig)
 
 	if err := g.injectSecrets(finalConfig, project); err != nil {
@@ -92,7 +94,7 @@ func (g *DockerComposeGenerator) buildBaseDockerComposeConfig() map[string]inter
 }
 
 // addServicesFromManifests adds services from manifests to docker-compose config
-func (g *DockerComposeGenerator) addServicesFromManifests(config map[string]interface{}, manifests map[string]*pkg.ServoDefinition) {
+func (g *DockerComposeGenerator) addServicesFromManifests(config map[string]interface{}, manifests map[string]*pkg.ServoDefinition) error {
 	services := config["services"].(map[string]interface{})
 
 	for manifestName, manifest := range manifests {
@@ -132,12 +134,28 @@ func (g *DockerComposeGenerator) addServicesFromManifests(config map[string]inte
 				if len(service.Ports) > 0 {
 					serviceConfig["ports"] = service.Ports
 				}
+				
+				// Merge environment variables from multiple sources
+				envSlice := []string{}
+				
+				// 1. Add project-level environment variables first
+				projectEnv, err := g.LoadProjectEnvironmentVariables()
+				if err != nil {
+					return fmt.Errorf("failed to load project environment variables: %w", err)
+				}
+				for key, value := range projectEnv {
+					envSlice = append(envSlice, key+"="+value)
+				}
+				
+				// 2. Add service-specific environment variables (these can override project-level)
 				if service.Environment != nil {
-					// Convert environment map to slice format (preferred for docker-compose)
-					envSlice := make([]string, 0, len(service.Environment))
 					for key, value := range service.Environment {
 						envSlice = append(envSlice, key+"="+value)
 					}
+				}
+				
+				// Set environment if we have any variables
+				if len(envSlice) > 0 {
 					serviceConfig["environment"] = envSlice
 				}
 				if len(service.Volumes) > 0 {
@@ -173,6 +191,7 @@ func (g *DockerComposeGenerator) addServicesFromManifests(config map[string]inte
 			}
 		}
 	}
+	return nil
 }
 
 // buildWorkspaceService creates the main workspace service

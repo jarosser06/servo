@@ -61,21 +61,32 @@ servo install ./my-custom-server.servo
 servo install ./local-mcp-server/
 ```
 
-### 3. Configure Required Secrets
+### 3. Configure Environment Variables (Optional)
+```bash
+# Set non-sensitive configuration values
+servo env set API_TIMEOUT "30s"
+servo env set DEBUG_MODE "false"
+servo env set BASE_URL "https://api.example.com"
+```
+
+### 4. Configure Required Secrets
 ```bash
 # Set secrets declared in .servo files
 servo secrets set openai_api_key sk-your-key-here
 servo secrets set database_url postgres://user:pass@localhost/db
 ```
 
-### 4. Start Development Environment
+### 5. Start Development Environment
 ```bash
 servo work
 # Generates:
 # - .devcontainer/devcontainer.json (with runtime features)
-# - .devcontainer/docker-compose.yml (with service dependencies)  
-# - .vscode/mcp.json (MCP server configuration)
+# - .devcontainer/docker-compose.yml (with service dependencies and env vars)  
+# - .vscode/settings.json (MCP server configuration)
 # - .mcp.json (Claude Code configuration)
+
+# Or generate just client configurations:
+servo configure
 ```
 
 ## Installation
@@ -176,8 +187,29 @@ servo status
 - Missing secrets
 - Client configurations
 
+#### `servo configure`
+Generate MCP client configurations independently of install/work workflows.
+
+```bash
+servo configure [OPTIONS]
+```
+
+**Flags:**
+- `--client, -c` - Target specific client for optimized configuration
+
+**Examples:**
+```bash
+servo configure                    # Generate configs for all clients
+servo configure --client vscode   # Generate only VS Code configuration
+```
+
+**Generated Files:**
+- `.vscode/settings.json` - VS Code MCP configuration
+- `.mcp.json` - Claude Code MCP configuration
+- `.cursor/settings.json` - Cursor MCP configuration (if applicable)
+
 #### `servo work`
-Generate and start development environment with MCP servers.
+Generate development environment and client configurations.
 
 ```bash
 servo work [OPTIONS]
@@ -194,8 +226,8 @@ servo work --client vscode    # Focus on VS Code configuration
 
 **Generated Files:**
 - `.devcontainer/devcontainer.json` - Development container configuration
-- `.devcontainer/docker-compose.yml` - Service dependencies
-- `.vscode/mcp.json` - VS Code MCP configuration
+- `.devcontainer/docker-compose.yml` - Service dependencies (with env var injection)
+- `.vscode/settings.json` - VS Code MCP configuration
 - `.mcp.json` - Claude Code MCP configuration
 
 ### Session Management
@@ -253,43 +285,87 @@ servo session delete <SESSION_NAME>
 
 ### Configuration Management
 
-#### `servo config list`
-Show all project configuration values.
+#### `servo configure`
+Generate MCP client configurations independently of install/work workflows.
 
 ```bash
-servo config list
+servo configure [OPTIONS]
 ```
 
-#### `servo config get`
-Get a specific configuration value.
-
-```bash
-servo config get <KEY>
-```
-
-**Arguments:**
-- `KEY` - Configuration key to retrieve
-
-**Common Keys:**
-- `default_session` - Default session name
-- `active_session` - Currently active session
-- `clients` - Configured MCP clients
-
-#### `servo config set`
-Set a configuration value.
-
-```bash
-servo config set <KEY> <VALUE>
-```
-
-**Arguments:**
-- `KEY` - Configuration key
-- `VALUE` - Configuration value
+**Flags:**
+- `--client, -c` - Target specific client for optimized configuration
 
 **Examples:**
 ```bash
-servo config set default_session production
-servo config set active_session development
+servo configure                    # Generate configs for all clients
+servo configure --client vscode   # Generate only VS Code configuration
+```
+
+### Environment Variables Management
+Manage non-sensitive project-level environment variables that are automatically injected into MCP services.
+
+Environment variables are stored in `.servo/env.yaml` and are safe to commit to version control.
+
+#### `servo env list`
+Display all project environment variables.
+
+```bash
+servo env list
+```
+
+#### `servo env get`
+Get a specific environment variable value.
+
+```bash
+servo env get <KEY>
+```
+
+**Arguments:**
+- `KEY` - Environment variable name
+
+**Examples:**
+```bash
+servo env get API_TIMEOUT
+servo env get BASE_URL
+```
+
+#### `servo env set`
+Set or update an environment variable.
+
+```bash
+servo env set <KEY> <VALUE>
+```
+
+**Arguments:**
+- `KEY` - Environment variable name
+- `VALUE` - Environment variable value
+
+**Examples:**
+```bash
+servo env set API_TIMEOUT "60s"
+servo env set BASE_URL "https://api.example.com"
+servo env set DEBUG_MODE "false"
+```
+
+#### `servo env delete`
+Remove an environment variable.
+
+```bash
+servo env delete <KEY>
+```
+
+#### `servo env export`
+Export environment variables to a file for backup or sharing.
+
+```bash
+servo env export <OUTPUT_FILE>
+```
+
+#### `servo env import`
+Import environment variables from a file.
+
+```bash
+servo env import <INPUT_FILE>
 ```
 
 ### Secrets Management
@@ -412,7 +488,9 @@ servo validate ./server.servo
 servo validate https://github.com/user/repo.git
 ```
 
-## Environment Variables
+## System Environment Variables
+
+System-level environment variables that control Servo's behavior across all projects.
 
 ### Global Settings
 - `SERVO_NON_INTERACTIVE` - Disable interactive prompts (for CI/scripts)
@@ -430,7 +508,8 @@ servo validate https://github.com/user/repo.git
 my-project/                           # Your project root
 ├── .servo/                          # Servo project directory
 │   ├── project.yaml                 # Project configuration
-│   ├── secrets.enc                  # Encoded secrets (local only)
+│   ├── env.yaml                     # Environment variables (committed)
+│   ├── secrets.yaml                 # Encoded secrets (local only)
 │   ├── .gitignore                   # Ignores secrets and volumes
 │   └── sessions/                    # Session directories
 │       ├── default/                 # Default session
@@ -444,7 +523,7 @@ my-project/                           # Your project root
 │           └── volumes/
 ├── .devcontainer/                   # Generated development container
 │   ├── devcontainer.json           # Dev container configuration
-│   └── docker-compose.yml          # Service dependencies
+│   └── docker-compose.yml          # Service dependencies (with env vars)
 ├── .vscode/                         # Generated VS Code settings
 │   └── settings.json               # MCP server configuration
 └── .mcp.json                       # Generated Claude Code configuration
@@ -521,12 +600,17 @@ servo init awesome-app --clients vscode,claude-code
 servo install https://github.com/getzep/graphiti.git
 servo install ./custom-analytics-server/
 
-# Configure project
+# Configure project environment variables
+servo env set API_TIMEOUT "30s"
+servo env set BASE_URL "https://api.example.com"
+servo env set DEBUG_MODE "false"
+
+# Configure project secrets
 servo secrets set openai_api_key sk-proj-...
 servo work
 
-# Commit project configuration
-git add .servo/project.yaml .devcontainer/ .vscode/ .mcp.json
+# Commit project configuration (env vars are included)
+git add .servo/project.yaml .servo/env.yaml .devcontainer/ .vscode/ .mcp.json
 git commit -m "Add servo project configuration"
 git push
 ```
@@ -540,10 +624,10 @@ cd awesome-project
 servo status
 # Output: "Missing required secrets: openai_api_key"
 
-# Configure local secrets
+# Configure local secrets (env vars already available from repo)
 servo secrets set openai_api_key sk-proj-...
 
-# Start development
+# Start development (env vars automatically injected into docker-compose)
 servo work
 # Opens VS Code with MCP servers automatically configured
 ```
@@ -555,7 +639,14 @@ servo work
 servo session create development --description "Local development"
 servo session activate development
 servo install ./dev-tools-server.servo --session development
-servo secrets set debug_mode true
+
+# Set environment variables for development
+servo env set DEBUG_MODE "true"
+servo env set LOG_LEVEL "debug"
+servo env set API_TIMEOUT "60s"
+
+# Set secrets
+servo secrets set dev_api_key sk-dev-...
 servo work
 ```
 
@@ -564,7 +655,14 @@ servo work
 servo session create staging --description "Staging environment"
 servo session activate staging  
 servo install ./analytics-server.servo --session staging
-servo secrets set api_endpoint https://staging-api.company.com
+
+# Set environment variables for staging
+servo env set DEBUG_MODE "false"
+servo env set LOG_LEVEL "info"
+servo env set API_URL "https://staging-api.company.com"
+
+# Set secrets
+servo secrets set staging_api_key sk-staging-...
 servo work --client vscode
 ```
 

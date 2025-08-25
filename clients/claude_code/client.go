@@ -2,6 +2,7 @@ package claude_code
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -128,21 +129,24 @@ func (c *Client) GetCurrentConfig(scope string) (*pkg.MCPConfig, error) {
 		return nil, err
 	}
 
-	// Claude Code manages its own configuration internally
-	// We use the CLI to query current servers
-	servers, err := c.listMCPServers(scope)
+	// Read from .mcp.json file
+	configPath, err := client.ExpandPath(".mcp.json")
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get Claude Code config path: %w", err)
 	}
 
 	config := &pkg.MCPConfig{
 		Servers: make(map[string]pkg.MCPServerConfig),
 	}
 
-	for _, server := range servers {
-		config.Servers[server] = pkg.MCPServerConfig{
-			Command: "managed-by-claude-code",
+	// Try to read existing config
+	if err := client.ReadJSONFile(configPath, config); err != nil {
+		// If file doesn't exist, return empty config
+		// For other errors, return the error
+		if os.IsNotExist(err) {
+			return config, nil
 		}
+		return nil, fmt.Errorf("failed to read Claude Code config: %w", err)
 	}
 
 	return config, nil
@@ -154,10 +158,8 @@ func (c *Client) ValidateConfig(scope string) error {
 		return err
 	}
 
-	// Check if claude mcp commands work
-	args := []string{"mcp", "list", "--local"}
-
-	_, err := c.executor.Execute("claude", args...)
+	// Try to read and parse the config file
+	_, err := c.GetCurrentConfig(scope)
 	return err
 }
 
@@ -172,94 +174,48 @@ func (c *Client) TriggerReload() error {
 	return nil
 }
 
-// listMCPServers lists currently configured MCP servers
-func (c *Client) listMCPServers(scope string) ([]string, error) {
-	args := []string{"mcp", "list", "--local"}
-
-	output, err := c.executor.Execute("claude", args...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list MCP servers: %w", err)
-	}
-
-	// Parse output to extract server names
-	lines := strings.Split(string(output), "\n")
-	var servers []string
-
-	for _, line := range lines {
-		line = strings.TrimSpace(line)
-		if line != "" && !strings.HasPrefix(line, "#") {
-			// Extract server name from output
-			parts := strings.Fields(line)
-			if len(parts) > 0 {
-				servers = append(servers, parts[0])
-			}
-		}
-	}
-
-	return servers, nil
-}
-
-// AddServer adds a server using Claude Code CLI
-func (c *Client) AddServer(scope string, serverName string, command string, args []string) error {
-	if err := c.ValidateScope(scope); err != nil {
-		return err
-	}
-
-	cmdArgs := []string{"mcp", "add", serverName, command}
-	cmdArgs = append(cmdArgs, args...)
-
-	if scope == "local" {
-		cmdArgs = append(cmdArgs, "--local")
-	}
-
-	return c.executor.Run("claude", cmdArgs...)
-}
-
-// RemoveServer removes a server using Claude Code CLI
+// RemoveServer removes a server by updating the configuration file
 func (c *Client) RemoveServer(scope string, serverName string) error {
 	if err := c.ValidateScope(scope); err != nil {
 		return err
 	}
 
-	args := []string{"mcp", "remove", serverName}
-	if scope == "local" {
-		args = append(args, "--local")
+	// Get current config
+	config, err := c.GetCurrentConfig(scope)
+	if err != nil {
+		return fmt.Errorf("failed to get current config: %w", err)
 	}
 
-	return c.executor.Run("claude", args...)
+	// Check if server exists
+	if _, exists := config.Servers[serverName]; !exists {
+		return fmt.Errorf("server '%s' not found", serverName)
+	}
+
+	// Remove the server
+	delete(config.Servers, serverName)
+
+	// Write the updated config back to file
+	configPath, err := client.ExpandPath(".mcp.json")
+	if err != nil {
+		return fmt.Errorf("failed to get Claude Code config path: %w", err)
+	}
+
+	return client.WriteJSONFile(configPath, config)
 }
 
-// ListServers returns the names of configured servers
+// ListServers returns the names of configured servers from the config file
 func (c *Client) ListServers(scope string) ([]string, error) {
-	return c.listMCPServers(scope)
-}
-
-// EnableServer enables a server
-func (c *Client) EnableServer(scope string, serverName string) error {
-	if err := c.ValidateScope(scope); err != nil {
-		return err
+	config, err := c.GetCurrentConfig(scope)
+	if err != nil {
+		return nil, err
 	}
 
-	args := []string{"mcp", "enable", serverName}
-	if scope == "local" {
-		args = append(args, "--local")
+	var servers []string
+	for name := range config.Servers {
+		servers = append(servers, name)
 	}
 
-	return c.executor.Run("claude", args...)
-}
-
-// DisableServer disables a server
-func (c *Client) DisableServer(scope string, serverName string) error {
-	if err := c.ValidateScope(scope); err != nil {
-		return err
-	}
-
-	args := []string{"mcp", "disable", serverName}
-	if scope == "local" {
-		args = append(args, "--local")
-	}
-
-	return c.executor.Run("claude", args...)
+	return servers, nil
 }
 
 // GetLaunchCommand returns the command to launch Claude Code with the given project path

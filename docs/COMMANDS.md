@@ -8,10 +8,11 @@ This document provides a comprehensive reference for all Servo CLI commands, the
 - [Project Management](#project-management)
 - [Session Management](#session-management)
 - [Configuration Management](#configuration-management)
+- [Environment Variables Management](#environment-variables-management)
 - [Secrets Management](#secrets-management)
 - [Client Management](#client-management)
 - [Validation](#validation)
-- [Environment Variables](#environment-variables)
+- [Global Environment Variables](#global-environment-variables)
 - [Exit Codes](#exit-codes)
 
 ## Global Options
@@ -505,28 +506,83 @@ servo session rename default main
 
 ## Configuration Management
 
-Project-level configuration management for settings, preferences, and metadata.
+Generate MCP client configurations and manage project-level environment variables.
 
-### `servo config list`
+### `servo configure`
 
-Display all project configuration values.
+Generate MCP client configurations independently of the install/work workflow.
 
 **Syntax:**
 ```bash
-servo config list
+servo configure [OPTIONS]
+```
+
+**Options:**
+- `--client, -c <name>` - Target specific client for optimized configuration
+
+**Supported Clients:**
+- `vscode` - Visual Studio Code
+- `claude-code` - Claude Code  
+- `cursor` - Cursor
+- `crewai` - CrewAI
+
+**Examples:**
+```bash
+# Generate configurations for all detected clients
+servo configure
+
+# Generate only VS Code configuration
+servo configure --client vscode
+
+# Generate only Claude Code configuration  
+servo configure --client claude-code
+```
+
+**Generated Files:**
+- **`.vscode/settings.json`** - VS Code MCP configuration
+- **`.mcp.json`** - Claude Code MCP configuration  
+- **`.cursor/settings.json`** - Cursor MCP configuration (if applicable)
+
+**Process:**
+1. Load project configuration
+2. Determine active session
+3. Collect installed servers
+4. Generate client-specific MCP configurations
+5. Validate generated configurations
+
+**Exit Codes:**
+- `0` - Success
+- `1` - Any error (not in project directory, no servers installed, etc.)
+- `3` - Missing required secrets
+
+---
+
+## Environment Variables Management
+
+Manage non-sensitive environment variables that are automatically injected into MCP services during docker-compose generation.
+
+**Storage:** Environment variables are stored in `.servo/env.yaml` and are safe to commit to version control.
+
+**Integration:** Variables are automatically injected into all MCP server services in docker-compose.yml generation, with service-specific overrides supported.
+
+### `servo env list`
+
+Display all project environment variables.
+
+**Syntax:**
+```bash
+servo env list
 ```
 
 **No options or arguments.**
 
 **Output Format:**
 ```
-Project Configuration:
-  name: awesome-app
-  description: My awesome application
-  created_at: 2025-01-15T10:30:00Z
-  default_session: default
-  active_session: development
-  clients: [vscode, claude-code]
+Project Environment Variables:
+  API_TIMEOUT: "30s"
+  DEBUG_MODE: "true"
+  BASE_URL: "https://api.example.com"
+  MAX_RETRIES: "3"
 ```
 
 **Exit Codes:**
@@ -535,31 +591,25 @@ Project Configuration:
 
 ---
 
-### `servo config get`
+### `servo env get`
 
-Retrieve a specific configuration value.
+Retrieve a specific environment variable value.
 
 **Syntax:**
 ```bash
-servo config get <KEY>
+servo env get <KEY>
 ```
 
 **Arguments:**
-- `KEY` - Configuration key to retrieve (required)
-
-**Available Keys:**
-- `name` - Project name
-- `description` - Project description
-- `created_at` - Project creation timestamp
-- `default_session` - Default session name
-- `active_session` - Currently active session
-- `clients` - Configured MCP clients array
+- `KEY` - Environment variable name (required)
 
 **Examples:**
 ```bash
-servo config get name
-servo config get active_session
-servo config get clients
+servo env get API_TIMEOUT
+servo env get BASE_URL
+
+# Use in scripts
+API_URL=$(servo env get BASE_URL)
 ```
 
 **Exit Codes:**
@@ -568,39 +618,116 @@ servo config get clients
 
 ---
 
-### `servo config set`
+### `servo env set`
 
-Set a project configuration value.
+Set or update an environment variable.
 
 **Syntax:**
 ```bash
-servo config set <KEY> <VALUE>
+servo env set <KEY> <VALUE>
 ```
 
 **Arguments:**
-- `KEY` - Configuration key (required)
-- `VALUE` - Configuration value (required)
-
-**Settable Keys:**
-- `name` - Project name
-- `description` - Project description
-- `default_session` - Default session name
-- `active_session` - Currently active session
-
-**Note:** Some keys like `created_at` are read-only.
+- `KEY` - Environment variable name (required)
+- `VALUE` - Environment variable value (required)
 
 **Examples:**
 ```bash
-servo config set name "My New Project Name"
-servo config set description "Updated description"
-servo config set default_session production
-servo config set active_session development
+servo env set API_TIMEOUT "60s"
+servo env set BASE_URL "https://staging-api.example.com"
+servo env set DEBUG_MODE "false"
+servo env set MAX_CONNECTIONS "10"
+```
+
+**Usage Notes:**
+- Values are stored in plaintext in `.servo/env.yaml`
+- Use for non-sensitive configuration only (URLs, timeouts, feature flags)
+- For sensitive data, use `servo secrets` instead
+- Variables are automatically injected into MCP services via docker-compose
+
+**Exit Codes:**
+- `0` - Success
+- `1` - Any error (invalid key, not in project directory, etc.)
+
+---
+
+### `servo env delete`
+
+Remove an environment variable.
+
+**Syntax:**
+```bash
+servo env delete <KEY>
+```
+
+**Arguments:**
+- `KEY` - Environment variable name to remove (required)
+
+**Examples:**
+```bash
+servo env delete DEBUG_MODE
+servo env delete API_TIMEOUT
 ```
 
 **Exit Codes:**
 - `0` - Success
-- `1` - Any error (invalid key, invalid value, etc.)
-- `3` - Not in a project directory
+- `1` - Any error (key not found, not in project directory, etc.)
+
+---
+
+### `servo env export`
+
+Export environment variables to a file for backup or sharing.
+
+**Syntax:**
+```bash
+servo env export <OUTPUT_FILE>
+```
+
+**Arguments:**
+- `OUTPUT_FILE` - Path to export file (required)
+
+**Examples:**
+```bash
+servo env export ./project-env.yaml
+servo env export /backup/project-environment.yaml
+```
+
+**Output Format:**
+The exported file contains YAML-formatted environment variables that can be imported into other projects.
+
+**Exit Codes:**
+- `0` - Success
+- `1` - Any error (write failed, not in project directory, etc.)
+
+---
+
+### `servo env import`
+
+Import environment variables from a file.
+
+**Syntax:**
+```bash
+servo env import <INPUT_FILE>
+```
+
+**Arguments:**
+- `INPUT_FILE` - Path to import file (required)
+
+**Examples:**
+```bash
+servo env import ./project-env.yaml
+servo env import /backup/project-environment.yaml
+```
+
+**Behavior:**
+- Merges imported variables with existing ones
+- Overwrites existing variables with matching keys
+- Preserves existing variables not present in import file
+
+**Exit Codes:**
+- `0` - Success
+- `1` - Any error (file not found, invalid format, not in project directory, etc.)
 
 ## Secrets Management
 
@@ -1001,7 +1128,9 @@ servo validate https://raw.githubusercontent.com/user/repo/main/server.servo
 - `1` - Any error (validation failed, source not found or inaccessible, etc.)
 - `3` - Invalid source format
 
-## Environment Variables
+## Global Environment Variables
+
+System-level environment variables that control Servo's behavior across all projects.
 
 ### Global Configuration
 

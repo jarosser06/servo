@@ -195,6 +195,16 @@ func NewApp(version string) (*cli.App, error) {
 			},
 
 			{
+				Name:        "configure",
+				Usage:       "Generate MCP client configurations",
+				Description: "Generate configuration files for MCP clients based on installed servers",
+				Action: func(c *cli.Context) error {
+					configureCmd := commands.NewConfigureCommand()
+					return configureCmd.Execute([]string{})
+				},
+			},
+
+			{
 				Name:        "work",
 				Usage:       "Start development environment with MCP servers",
 				Description: "Launch the development environment with devcontainer support",
@@ -464,49 +474,75 @@ func NewApp(version string) (*cli.App, error) {
 			},
 
 			{
-				Name:        "config",
-				Usage:       "Manage project configuration",
-				Description: "Get and set project-level configuration values",
+				Name:        "env",
+				Usage:       "Manage project environment variables",
+				Description: "Manage non-sensitive environment variables like URLs, API endpoints, etc.",
 				Subcommands: []*cli.Command{
 					{
 						Name:  "list",
-						Usage: "Show all project configuration",
+						Usage: "List all environment variables",
 						Action: func(c *cli.Context) error {
 							if !projectManager.IsProject() {
 								return fmt.Errorf("not in a servo project directory")
 							}
-							configCmd := commands.NewConfigCommand(projectManager)
-							return configCmd.Execute([]string{"list"})
+							envCmd := commands.NewEnvCommand(projectManager)
+							return envCmd.Execute([]string{"list"})
 						},
 					},
 					{
 						Name:      "get",
-						Usage:     "Get a configuration value",
+						Usage:     "Get an environment variable value",
 						ArgsUsage: "<key>",
 						Action: func(c *cli.Context) error {
 							if c.NArg() == 0 {
-								return fmt.Errorf("configuration key required")
+								return fmt.Errorf("environment variable key required")
 							}
 							if !projectManager.IsProject() {
 								return fmt.Errorf("not in a servo project directory")
 							}
-							configCmd := commands.NewConfigCommand(projectManager)
-							return configCmd.Execute([]string{"get", c.Args().First()})
+							envCmd := commands.NewEnvCommand(projectManager)
+							return envCmd.Execute([]string{"get", c.Args().First()})
 						},
 					},
 					{
 						Name:      "set",
-						Usage:     "Set a configuration value",
+						Usage:     "Set an environment variable value",
 						ArgsUsage: "<key> <value>",
 						Action: func(c *cli.Context) error {
 							if c.NArg() < 2 {
-								return fmt.Errorf("configuration key and value required")
+								return fmt.Errorf("environment variable key and value required")
 							}
 							if !projectManager.IsProject() {
 								return fmt.Errorf("not in a servo project directory")
 							}
-							configCmd := commands.NewConfigCommand(projectManager)
-							return configCmd.Execute([]string{"set", c.Args().Get(0), c.Args().Get(1)})
+							envCmd := commands.NewEnvCommand(projectManager)
+							return envCmd.Execute([]string{"set", c.Args().Get(0), c.Args().Get(1)})
+						},
+					},
+					{
+						Name:      "delete",
+						Usage:     "Delete an environment variable",
+						ArgsUsage: "<key>",
+						Action: func(c *cli.Context) error {
+							if c.NArg() == 0 {
+								return fmt.Errorf("environment variable key required")
+							}
+							if !projectManager.IsProject() {
+								return fmt.Errorf("not in a servo project directory")
+							}
+							envCmd := commands.NewEnvCommand(projectManager)
+							return envCmd.Execute([]string{"delete", c.Args().First()})
+						},
+					},
+					{
+						Name:  "export",
+						Usage: "Export environment variables as shell commands",
+						Action: func(c *cli.Context) error {
+							if !projectManager.IsProject() {
+								return fmt.Errorf("not in a servo project directory")
+							}
+							envCmd := commands.NewEnvCommand(projectManager)
+							return envCmd.Execute([]string{"export"})
 						},
 					},
 				},

@@ -23,7 +23,7 @@ func TestApp_Creation(t *testing.T) {
 	}
 
 	// Test that required commands are present
-	requiredCommands := []string{"init", "install", "status", "work", "validate", "client", "config", "secrets"}
+	requiredCommands := []string{"init", "install", "status", "configure", "work", "validate", "client", "env", "secrets"}
 	for _, cmdName := range requiredCommands {
 		found := false
 		for _, cmd := range app.Commands {

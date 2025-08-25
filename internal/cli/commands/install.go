@@ -150,10 +150,6 @@ func (c *InstallCommand) ExecuteWithOptions(args []string, clients []string, ses
 	if c.hasClaudeCodeClient(clients) {
 		fmt.Println("  • .mcp.json (Claude Code configuration)")
 	}
-	fmt.Println()
-	fmt.Println("Next steps:")
-	fmt.Println("  • Open in VSCode Dev Container")
-	fmt.Println("  • MCP servers will be installed and configured automatically")
 
 	return nil
 }

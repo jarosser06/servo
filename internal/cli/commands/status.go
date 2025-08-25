@@ -5,18 +5,32 @@ import (
 	"os"
 	"strings"
 
+	"github.com/servo/servo/clients/claude_code"
+	"github.com/servo/servo/clients/cursor"
+	"github.com/servo/servo/clients/vscode"
+	"github.com/servo/servo/internal/client"
 	"github.com/servo/servo/internal/project"
+	"github.com/servo/servo/pkg"
 )
 
 // StatusCommand handles project status display
 type StatusCommand struct {
 	projectManager *project.Manager
+	clientRegistry *client.Registry
 }
 
 // NewStatusCommand creates a new status command
 func NewStatusCommand() *StatusCommand {
+	clientRegistry := client.NewRegistry()
+	
+	// Register built-in clients
+	clientRegistry.Register(claude_code.New())
+	clientRegistry.Register(vscode.New())
+	clientRegistry.Register(cursor.New())
+	
 	return &StatusCommand{
 		projectManager: project.NewManager(),
+		clientRegistry: clientRegistry,
 	}
 }
 
@@ -89,17 +103,7 @@ func (c *StatusCommand) Execute(args []string) error {
 	// Show client configurations
 	fmt.Println()
 	fmt.Printf("Client Configurations:\n")
-	if c.checkVSCodeConfigExists() {
-		fmt.Printf("  • VSCode: ✅ .vscode/mcp.json\n")
-	} else {
-		fmt.Printf("  • VSCode: ❌ Not configured\n")
-	}
-
-	if c.checkClaudeCodeConfigExists() {
-		fmt.Printf("  • Claude Code: ✅ .mcp.json\n")
-	} else {
-		fmt.Printf("  • Claude Code: ❌ Not configured\n")
-	}
+	c.showClientConfigurations(project)
 
 	// Show secrets status
 	fmt.Println()
@@ -116,14 +120,63 @@ func (c *StatusCommand) checkDevcontainerExists() bool {
 	return err == nil
 }
 
-func (c *StatusCommand) checkVSCodeConfigExists() bool {
-	_, err := os.Stat(".vscode/mcp.json")
-	return err == nil
+func (c *StatusCommand) showClientConfigurations(project *project.Project) {
+	// Only show status for clients that are configured in the project
+	if len(project.Clients) == 0 {
+		fmt.Printf("  • No clients configured\n")
+		return
+	}
+
+	hasUnconfigured := false
+	for _, clientName := range project.Clients {
+		client, err := c.clientRegistry.Get(clientName)
+		if err != nil {
+			fmt.Printf("  • %s: ❌ Unknown client\n", clientName)
+			continue
+		}
+
+		// Check if client is installed
+		if !client.IsInstalled() {
+			fmt.Printf("  • %s: ❌ Not installed\n", client.Name())
+			continue
+		}
+
+		// Check if client has configuration
+		hasConfig := c.checkClientConfig(client)
+		if hasConfig {
+			fmt.Printf("  • %s: ✅ Configured\n", client.Name())
+		} else {
+			fmt.Printf("  • %s: ⚠️  Available but not configured\n", client.Name())
+			hasUnconfigured = true
+		}
+	}
+
+	// Show helpful tip if there are unconfigured clients
+	if hasUnconfigured {
+		fmt.Printf("  💡 Generate client configurations: servo configure\n")
+	}
 }
 
-func (c *StatusCommand) checkClaudeCodeConfigExists() bool {
-	_, err := os.Stat(".mcp.json")
-	return err == nil
+func (c *StatusCommand) checkClientConfig(client pkg.Client) bool {
+	// Check for common configuration files based on client type
+	switch client.Name() {
+	case "vscode":
+		_, err := os.Stat(".vscode/mcp.json")
+		return err == nil
+	case "claude-code":
+		_, err := os.Stat(".mcp.json")
+		return err == nil
+	case "cursor":
+		_, err := os.Stat(".cursor/mcp.json")
+		return err == nil
+	default:
+		// For unknown clients, try to get current config
+		config, err := client.GetCurrentConfig("local")
+		if err != nil {
+			return false
+		}
+		return len(config.Servers) > 0
+	}
 }
 
 func (c *StatusCommand) showSecretsStatus(project *project.Project) {

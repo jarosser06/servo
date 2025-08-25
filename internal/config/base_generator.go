@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/servo/servo/internal/manifest"
@@ -10,6 +11,7 @@ import (
 	"github.com/servo/servo/internal/project"
 	"github.com/servo/servo/internal/session"
 	"github.com/servo/servo/pkg"
+	"gopkg.in/yaml.v3"
 )
 
 // BaseGenerator provides common functionality for all configuration generators.
@@ -355,4 +357,38 @@ func (g *BaseGenerator) injectSecretsForTesting(baseConfig map[string]interface{
 	}
 
 	return result, nil
+}
+
+// EnvData represents the structure of environment variables file
+type EnvData struct {
+	Version string            `yaml:"version"`
+	Env     map[string]string `yaml:"env"`
+}
+
+// LoadProjectEnvironmentVariables loads environment variables from the project's env.yaml file
+func (g *BaseGenerator) LoadProjectEnvironmentVariables() (map[string]string, error) {
+	envPath := filepath.Join(g.servoDir, "env.yaml")
+	
+	// Check if env file exists
+	if _, err := os.Stat(envPath); os.IsNotExist(err) {
+		// No env file exists, return empty map (not an error)
+		return make(map[string]string), nil
+	}
+
+	// Read and parse env file
+	data, err := os.ReadFile(envPath)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read environment variables file: %w", err)
+	}
+
+	var envData EnvData
+	if err := yaml.Unmarshal(data, &envData); err != nil {
+		return nil, fmt.Errorf("failed to parse environment variables file: %w", err)
+	}
+
+	if envData.Env == nil {
+		return make(map[string]string), nil
+	}
+
+	return envData.Env, nil
 }

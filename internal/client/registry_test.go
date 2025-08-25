@@ -134,8 +134,22 @@ func TestRegistry_GetSupportingScope(t *testing.T) {
 		t.Errorf("Expected 0 clients supporting global scope, got %d", len(globalSupporting))
 	}
 
-	if localSupporting[0].Name() != "local-scopes" {
-		t.Errorf("Expected 'local-scopes' client, got '%s'", localSupporting[0].Name())
+	// Check that both expected clients are present (order is not guaranteed)
+	foundLocalScopes := false
+	foundLocalOnly := false
+	for _, client := range localSupporting {
+		if client.Name() == "local-scopes" {
+			foundLocalScopes = true
+		}
+		if client.Name() == "local-only" {
+			foundLocalOnly = true
+		}
+	}
+	if !foundLocalScopes {
+		t.Errorf("Expected 'local-scopes' client to be in supporting clients")
+	}
+	if !foundLocalOnly {
+		t.Errorf("Expected 'local-only' client to be in supporting clients")
 	}
 }
 
