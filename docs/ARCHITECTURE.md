@@ -43,16 +43,17 @@ Servo uses project-based sessions for complete isolation and portability:
 project/
 ├── .servo/
 │   ├── project.yaml          # Project configuration and server declarations
+│   ├── config/              # Project-level config overrides (docker-compose.yml, devcontainer.json)
 │   ├── secrets.yaml          # Base64-encoded secrets (local only)
 │   ├── .gitignore           # Excludes secrets and volumes
 │   └── sessions/
 │       ├── default/         # Default session
 │       │   ├── manifests/   # Downloaded .servo file definitions
-│       │   ├── config/      # Session-specific config overrides
+│       │   ├── config/      # Session-specific config overrides (docker-compose.yml, devcontainer.json)
 │       │   └── volumes/     # Docker volumes (gitignored)
 │       └── development/     # Development session
 │           ├── manifests/   
-│           ├── config/      
+│           ├── config/      # Session-specific overrides
 │           └── volumes/     
 ├── .devcontainer/           # Generated development container
 │   ├── devcontainer.json   # Dev container configuration
@@ -113,6 +114,15 @@ func (c *ConfigGeneratorManager) GenerateDockerCompose() error
 - **Devcontainer**: `.devcontainer/devcontainer.json` with runtime features and service integrations
 - **Docker Compose**: `.devcontainer/docker-compose.yml` with all service dependencies
 - **MCP Configurations**: Client-specific configuration files in project root
+
+#### Custom Configuration Support
+Servo supports comprehensive configuration customization through override files:
+- **Project-level overrides**: `.servo/config/` for configurations applied to all sessions
+- **Session-level overrides**: `.servo/sessions/<name>/config/` for environment-specific settings
+- **Merge precedence**: Session overrides → Project overrides → Generated base configuration
+- **Full customization**: Add custom services, modify existing ones, customize VS Code settings
+
+See [Custom Configuration Guide](CUSTOM_CONFIGURATION.md) for detailed examples.
 
 #### Service Management Features
 - **Auto-generation**: Create devcontainer and Docker Compose from manifest definitions

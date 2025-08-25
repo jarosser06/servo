@@ -40,6 +40,16 @@ MCP servers are packaged using `.servo` files that define:
 - **Runtime requirements**: Programming language versions and tools
 - **Configuration schema**: Required secrets and settings
 
+### Custom Configuration
+
+Servo supports extensive customization of generated configurations:
+- **Docker Compose overrides**: Add custom services, modify existing ones, customize networks and volumes
+- **Devcontainer customization**: Add VS Code extensions, features, and development tools
+- **Project vs Session level**: Configure globally for all environments or per-session
+- **Override precedence**: Session-level configs override project-level configs
+
+📖 **See [Custom Configuration Guide](docs/CUSTOM_CONFIGURATION.md) for detailed examples**
+
 ## Quick Start
 
 ### 1. Initialize a Project
@@ -676,6 +686,16 @@ servo status                          # Validate project
 servo secrets set api_key "${API_KEY}" # Configure secrets from CI
 servo validate ./new-server.servo     # Validate new servers
 ```
+
+## Documentation
+
+| Document | Purpose |
+|----------|---------|
+| [Architecture](docs/ARCHITECTURE.md) | System design and component overview |
+| [Commands](docs/COMMANDS.md) | Comprehensive CLI command reference |
+| [Custom Configuration](docs/CUSTOM_CONFIGURATION.md) | Guide to customizing docker-compose and devcontainer files |
+| [Servo File Specification](docs/SERVO_FILE_SPEC.md) | .servo file format and schema |
+| [Servo Directory Structure](docs/SERVO_DIRECTORY.md) | Project directory organization |
 
 ## Supported MCP Clients
 

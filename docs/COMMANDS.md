@@ -139,6 +139,14 @@ servo work [--client <name>]
 - `.vscode/settings.json` - VS Code MCP configuration
 - `.mcp.json` - Claude Code MCP configuration
 
+**Custom Configuration Support:**
+Servo applies configuration overrides during generation:
+- **Project overrides**: `.servo/config/{docker-compose.yml,devcontainer.json}`
+- **Session overrides**: `.servo/sessions/<name>/config/{docker-compose.yml,devcontainer.json}`
+- **Merge order**: Base config → Project overrides → Session overrides
+
+See [Custom Configuration Guide](CUSTOM_CONFIGURATION.md) for adding custom services, VS Code extensions, and environment-specific settings.
+
 ## Session Management
 
 ### `servo session create <name> [--description <text>]`
