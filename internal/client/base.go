@@ -6,9 +6,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -20,14 +20,9 @@ type BaseClientInfo struct {
 }
 
 // IsPlatformSupportedForPlatforms checks if the current platform is supported by given platforms list
+// Deprecated: Use utils.IsPlatformSupported instead
 func IsPlatformSupportedForPlatforms(platforms []string) bool {
-	currentPlatform := runtime.GOOS
-	for _, platform := range platforms {
-		if platform == currentPlatform {
-			return true
-		}
-	}
-	return false
+	return utils.IsPlatformSupported(platforms)
 }
 
 // FileExists checks if a file exists
@@ -179,4 +174,48 @@ func RestoreConfigFile(path string) error {
 	}
 
 	return os.WriteFile(path, data, 0644)
+}
+
+// ResolveConfigPath returns the config path, using override if provided, otherwise falling back to default
+func ResolveConfigPath(overridePath string, defaultPath string) (string, error) {
+	if overridePath != "" {
+		return overridePath, nil
+	}
+	return ExpandPath(defaultPath)
+}
+
+// ExpandSecretsInString expands secret placeholders in a string using the provided secrets provider
+func ExpandSecretsInString(value string, secretsProvider func(string) (string, error)) string {
+	if !strings.Contains(value, "${") {
+		return value
+	}
+
+	result := value
+	start := strings.Index(result, "${")
+	for start != -1 {
+		end := strings.Index(result[start:], "}")
+		if end == -1 {
+			break
+		}
+		end += start
+
+		secretName := result[start+2 : end]
+		secretValue, err := secretsProvider(secretName)
+		if err != nil || secretValue == "" {
+			// Keep placeholder if secret not found
+			start = strings.Index(result[end+1:], "${")
+			if start != -1 {
+				start += end + 1
+			}
+			continue
+		}
+
+		result = result[:start] + secretValue + result[end+1:]
+		start = strings.Index(result[start+len(secretValue):], "${")
+		if start != -1 {
+			start += len(secretValue)
+		}
+	}
+
+	return result
 }

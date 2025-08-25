@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/servo/servo/internal/client"
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -34,7 +35,7 @@ func NewWithConfigPath(localPath string) *Client {
 		info: client.BaseClientInfo{
 			Name:        "vscode",
 			Description: "Visual Studio Code with MCP support",
-			Platforms:   []string{"darwin", "linux", "windows"},
+			Platforms:   utils.DesktopPlatforms,
 		},
 		localConfigPath: localPath,
 	}
@@ -54,7 +55,7 @@ func (c *Client) SupportedPlatforms() []string {
 
 // IsPlatformSupported checks if the current platform is supported
 func (c *Client) IsPlatformSupported() bool {
-	return client.IsPlatformSupportedForPlatforms(c.info.Platforms)
+	return utils.IsPlatformSupported(c.info.Platforms)
 }
 
 // IsInstalled checks if VS Code is installed
@@ -177,10 +178,7 @@ func (c *Client) TriggerReload() error {
 
 // getLocalConfigPath returns the local VS Code MCP config path
 func (c *Client) getLocalConfigPath() (string, error) {
-	if c.localConfigPath != "" {
-		return c.localConfigPath, nil
-	}
-	return client.ExpandPath(".vscode/mcp.json")
+	return client.ResolveConfigPath(c.localConfigPath, ".vscode/mcp.json")
 }
 
 // RemoveServer removes a server from the configuration
@@ -257,8 +255,17 @@ func (c *Client) InstallExtension(extensionID string) error {
 }
 
 // GetLaunchCommand returns the command to launch VS Code with the given project path
+// If a devcontainer is present, it uses the devcontainer CLI for direct container launch
 func (c *Client) GetLaunchCommand(projectPath string) string {
-	return fmt.Sprintf("code \"%s\"", projectPath)
+	// Check if devcontainer config exists
+	devcontainerPath := filepath.Join(projectPath, ".devcontainer", "devcontainer.json")
+	if client.FileExists(devcontainerPath) {
+		// Use devcontainer CLI for direct container launch
+		return fmt.Sprintf("# Launch VSCode in devcontainer\ndevcontainer up --workspace-folder \"%s\" && code --folder-uri=\"vscode-remote://dev-container+$(echo \"%s\" | tr -d '\\n' | xxd -c 256 -p)/workspaces/$(basename \"%s\")\"", projectPath, projectPath, projectPath)
+	}
+	
+	// Fallback to regular VSCode launch
+	return fmt.Sprintf("# Launch VSCode\ncode \"%s\"", projectPath)
 }
 
 // SupportsDevcontainers returns true if VS Code supports devcontainers
@@ -280,14 +287,14 @@ func (c *Client) GenerateConfig(manifests []pkg.ServoDefinition, secretsProvider
 
 			// Copy and expand args
 			for i, arg := range manifest.Server.Args {
-				serverConfig.Args[i] = c.expandSecrets(arg, secretsProvider)
+				serverConfig.Args[i] = client.ExpandSecretsInString(arg, secretsProvider)
 			}
 
 			// Build environment with secret expansion
 			if len(manifest.Server.Environment) > 0 {
 				serverConfig.Environment = make(map[string]string)
 				for key, value := range manifest.Server.Environment {
-					expandedValue := c.expandSecrets(value, secretsProvider)
+					expandedValue := client.ExpandSecretsInString(value, secretsProvider)
 					serverConfig.Environment[key] = expandedValue
 				}
 			}
@@ -315,38 +322,3 @@ func (c *Client) GenerateConfig(manifests []pkg.ServoDefinition, secretsProvider
 	return client.WriteJSONFile(configPath, vscodeConfig)
 }
 
-// expandSecrets expands secret placeholders in a string
-func (c *Client) expandSecrets(value string, secretsProvider func(string) (string, error)) string {
-	if !strings.Contains(value, "${") {
-		return value
-	}
-
-	result := value
-	start := strings.Index(result, "${")
-	for start != -1 {
-		end := strings.Index(result[start:], "}")
-		if end == -1 {
-			break
-		}
-		end += start
-
-		secretName := result[start+2 : end]
-		secretValue, err := secretsProvider(secretName)
-		if err != nil || secretValue == "" {
-			// Keep placeholder if secret not found
-			start = strings.Index(result[end+1:], "${")
-			if start != -1 {
-				start += end + 1
-			}
-			continue
-		}
-
-		result = result[:start] + secretValue + result[end+1:]
-		start = strings.Index(result[start+len(secretValue):], "${")
-		if start != -1 {
-			start += len(secretValue)
-		}
-	}
-
-	return result
-}

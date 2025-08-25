@@ -5,10 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/servo/servo/clients/claude_code"
-	"github.com/servo/servo/clients/cursor"
-	"github.com/servo/servo/clients/vscode"
-	"github.com/servo/servo/internal/client"
 	"github.com/servo/servo/internal/config"
 	"github.com/servo/servo/internal/manifest"
 	"github.com/servo/servo/internal/mcp"
@@ -29,24 +25,15 @@ type InstallCommand struct {
 
 // NewInstallCommand creates a new project install command
 func NewInstallCommand(parser *mcp.Parser, validator *mcp.Validator) *InstallCommand {
-	servoDir := os.Getenv("SERVO_DIR")
-	if servoDir == "" {
-		servoDir = ".servo" // Use project-local servo directory
-	}
-
-	// Create client registry and register default clients
-	clientRegistry := client.NewRegistry()
-	clientRegistry.Register(vscode.New())
-	clientRegistry.Register(cursor.New())
-	clientRegistry.Register(claude_code.New())
+	deps := NewBaseDependenciesWithParsers(parser, validator)
 
 	return &InstallCommand{
-		projectManager: project.NewManager(),
-		sessionManager: session.NewManager(servoDir),
-		configManager:  config.NewConfigGeneratorManager(servoDir),
-		clientRegistry: clientRegistry,
-		parser:         parser,
-		validator:      validator,
+		projectManager: deps.ProjectManager,
+		sessionManager: deps.SessionManager,
+		configManager:  deps.ConfigManager,
+		clientRegistry: deps.ClientRegistry,
+		parser:         deps.Parser,
+		validator:      deps.Validator,
 	}
 }
 

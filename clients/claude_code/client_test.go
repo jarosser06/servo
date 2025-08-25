@@ -1,8 +1,11 @@
 package claude_code
 
 import (
+	"encoding/json"
+	"os"
 	"testing"
 
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -50,7 +53,7 @@ func TestClient_SupportedPlatforms(t *testing.T) {
 	client := NewWithExecutor(&MockCommandExecutor{})
 	platforms := client.SupportedPlatforms()
 
-	expectedPlatforms := []string{"darwin", "linux", "windows"}
+	expectedPlatforms := utils.DesktopPlatforms
 	if len(platforms) != len(expectedPlatforms) {
 		t.Errorf("expected %d platforms, got %d", len(expectedPlatforms), len(platforms))
 	}
@@ -214,5 +217,170 @@ func TestClient_Integration(t *testing.T) {
 	err = client.TriggerReload()
 	if err != nil {
 		t.Errorf("failed to trigger reload: %v", err)
+	}
+}
+
+func TestClient_GenerateConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	// Change to temp directory for this test  
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tmpDir)
+	
+	// Use default client since GenerateConfig uses .mcp.json relative to current dir
+	client := New()
+
+	// Test manifests with secrets
+	manifests := []pkg.ServoDefinition{
+		{
+			Name: "test-server",
+			Server: pkg.Server{
+				Command: "python",
+				Args:    []string{"-m", "server", "--api-key", "${SERVO_SECRET:api_key}"},
+				Environment: map[string]string{
+					"DATABASE_URL": "${SERVO_SECRET:db_url}",
+					"DEBUG":        "true",
+				},
+			},
+		},
+		{
+			Name: "simple-server",
+			Server: pkg.Server{
+				Command: "node",
+				Args:    []string{"index.js"},
+			},
+		},
+	}
+
+	// Mock secrets provider
+	secretsProvider := func(key string) (string, error) {
+		secrets := map[string]string{
+			"SERVO_SECRET:api_key": "test-api-key-123",
+			"SERVO_SECRET:db_url":  "postgresql://user:pass@localhost/db",
+		}
+		return secrets[key], nil
+	}
+
+	// Generate config
+	err := client.GenerateConfig(manifests, secretsProvider)
+	if err != nil {
+		t.Fatalf("GenerateConfig failed: %v", err)
+	}
+
+	// Verify config file was created
+	configPath := ".mcp.json"
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatalf("Config file was not created at %s", configPath)
+	}
+
+	// Read and verify config content
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated config: %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(configData, &config); err != nil {
+		t.Fatalf("Failed to parse generated config: %v", err)
+	}
+
+	// Verify structure has mcpServers key (Claude Code uses MCPConfig format)
+	servers, exists := config["mcpServers"].(map[string]interface{})
+	if !exists {
+		t.Fatalf("Config should contain mcpServers key")
+	}
+
+	// Verify test-server configuration
+	testServer, exists := servers["test-server"].(map[string]interface{})
+	if !exists {
+		t.Fatalf("test-server not found in generated config")
+	}
+
+	if testServer["command"] != "python" {
+		t.Errorf("Expected command 'python', got '%v'", testServer["command"])
+	}
+
+	// Verify args expansion
+	args, ok := testServer["args"].([]interface{})
+	if !ok {
+		t.Fatalf("Expected args to be array")
+	}
+
+	expectedArgs := []string{"-m", "server", "--api-key", "test-api-key-123"}
+	if len(args) != len(expectedArgs) {
+		t.Errorf("Expected %d args, got %d", len(expectedArgs), len(args))
+	}
+
+	for i, expectedArg := range expectedArgs {
+		if i < len(args) && args[i] != expectedArg {
+			t.Errorf("Expected arg[%d] '%s', got '%v'", i, expectedArg, args[i])
+		}
+	}
+
+	// Verify environment variables expansion (uses 'env' field in JSON)
+	env, ok := testServer["env"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected env to be map")
+	}
+
+	if env["DATABASE_URL"] != "postgresql://user:pass@localhost/db" {
+		t.Errorf("Expected DATABASE_URL to be expanded, got '%v'", env["DATABASE_URL"])
+	}
+
+	if env["DEBUG"] != "true" {
+		t.Errorf("Expected DEBUG to be 'true', got '%v'", env["DEBUG"])
+	}
+
+	// Verify simple-server configuration
+	simpleServer, exists := servers["simple-server"].(map[string]interface{})
+	if !exists {
+		t.Fatalf("simple-server not found in generated config")
+	}
+
+	if simpleServer["command"] != "node" {
+		t.Errorf("Expected command 'node', got '%v'", simpleServer["command"])
+	}
+}
+
+func TestClient_GenerateConfig_EmptyManifests(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	// Change to temp directory for this test
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tmpDir)
+	
+	client := New()
+
+	// Generate config with empty manifests
+	err := client.GenerateConfig([]pkg.ServoDefinition{}, func(string) (string, error) {
+		return "", nil
+	})
+	if err != nil {
+		t.Fatalf("GenerateConfig with empty manifests failed: %v", err)
+	}
+
+	// Verify config file was created
+	configPath := ".mcp.json"
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatalf("Config file was not created at %s", configPath)
+	}
+
+	// Verify empty servers
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated config: %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(configData, &config); err != nil {
+		t.Fatalf("Failed to parse generated config: %v", err)
+	}
+
+	// The mcpServers field might be omitted when empty due to omitempty tag
+	servers, exists := config["mcpServers"].(map[string]interface{})
+	if exists && len(servers) != 0 {
+		t.Errorf("Expected empty servers map or no mcpServers field, got %d servers", len(servers))
 	}
 }

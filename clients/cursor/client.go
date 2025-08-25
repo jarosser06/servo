@@ -3,9 +3,9 @@ package cursor
 import (
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/servo/servo/internal/client"
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -33,7 +33,7 @@ func NewWithConfigPath(localPath string) *Client {
 		info: client.BaseClientInfo{
 			Name:        "cursor",
 			Description: "Cursor AI code editor",
-			Platforms:   []string{"darwin", "linux", "windows"},
+			Platforms:   utils.DesktopPlatforms,
 		},
 		localConfigPath: localPath,
 	}
@@ -53,7 +53,7 @@ func (c *Client) SupportedPlatforms() []string {
 
 // IsPlatformSupported checks if the current platform is supported
 func (c *Client) IsPlatformSupported() bool {
-	return client.IsPlatformSupportedForPlatforms(c.info.Platforms)
+	return utils.IsPlatformSupported(c.info.Platforms)
 }
 
 // IsInstalled checks if Cursor is installed
@@ -163,10 +163,7 @@ func (c *Client) TriggerReload() error {
 
 // getLocalConfigPath returns the local Cursor MCP config path
 func (c *Client) getLocalConfigPath() (string, error) {
-	if c.localConfigPath != "" {
-		return c.localConfigPath, nil
-	}
-	return client.ExpandPath(".cursor/mcp.json")
+	return client.ResolveConfigPath(c.localConfigPath, ".cursor/mcp.json")
 }
 
 // RemoveServer removes a server from the configuration
@@ -211,8 +208,17 @@ func (c *Client) ListServers(scope string) ([]string, error) {
 }
 
 // GetLaunchCommand returns the command to launch Cursor with the given project path
+// If a devcontainer is present, it uses the cursor CLI for devcontainer-aware launch
 func (c *Client) GetLaunchCommand(projectPath string) string {
-	return fmt.Sprintf("cursor \"%s\"", projectPath)
+	// Check if devcontainer config exists
+	devcontainerPath := filepath.Join(projectPath, ".devcontainer", "devcontainer.json")
+	if client.FileExists(devcontainerPath) {
+		// Cursor supports devcontainers natively when opening a project
+		return fmt.Sprintf("# Launch Cursor in devcontainer\ncursor \"%s\"", projectPath)
+	}
+	
+	// Regular Cursor launch
+	return fmt.Sprintf("# Launch Cursor\ncursor \"%s\"", projectPath)
 }
 
 // SupportsDevcontainers returns true if Cursor supports devcontainers
@@ -238,7 +244,7 @@ func (c *Client) GenerateConfig(manifests []pkg.ServoDefinition, secretsProvider
 			if len(manifest.Server.Args) > 0 {
 				args := make([]interface{}, len(manifest.Server.Args))
 				for i, arg := range manifest.Server.Args {
-					args[i] = c.expandSecrets(arg, secretsProvider)
+					args[i] = client.ExpandSecretsInString(arg, secretsProvider)
 				}
 				serverData["args"] = args
 			}
@@ -246,7 +252,7 @@ func (c *Client) GenerateConfig(manifests []pkg.ServoDefinition, secretsProvider
 			if len(manifest.Server.Environment) > 0 {
 				env := make(map[string]interface{})
 				for key, value := range manifest.Server.Environment {
-					expandedValue := c.expandSecrets(value, secretsProvider)
+					expandedValue := client.ExpandSecretsInString(value, secretsProvider)
 					env[key] = expandedValue
 				}
 				serverData["env"] = env
@@ -270,38 +276,3 @@ func (c *Client) GenerateConfig(manifests []pkg.ServoDefinition, secretsProvider
 	return client.WriteJSONFile(configPath, cursorConfig)
 }
 
-// expandSecrets expands secret placeholders in a string
-func (c *Client) expandSecrets(value string, secretsProvider func(string) (string, error)) string {
-	if !strings.Contains(value, "${") {
-		return value
-	}
-
-	result := value
-	start := strings.Index(result, "${")
-	for start != -1 {
-		end := strings.Index(result[start:], "}")
-		if end == -1 {
-			break
-		}
-		end += start
-
-		secretName := result[start+2 : end]
-		secretValue, err := secretsProvider(secretName)
-		if err != nil || secretValue == "" {
-			// Keep placeholder if secret not found
-			start = strings.Index(result[end+1:], "${")
-			if start != -1 {
-				start += end + 1
-			}
-			continue
-		}
-
-		result = result[:start] + secretValue + result[end+1:]
-		start = strings.Index(result[start+len(secretValue):], "${")
-		if start != -1 {
-			start += len(secretValue)
-		}
-	}
-
-	return result
-}

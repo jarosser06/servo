@@ -40,6 +40,12 @@ func TestDockerComposeGenerator_EnvironmentVariableIntegration(t *testing.T) {
 		t.Fatalf("Failed to create sessions directory: %v", err)
 	}
 
+	// Create manifests directory
+	manifestsDir := filepath.Join(sessionsDir, "manifests")
+	if err := os.MkdirAll(manifestsDir, 0755); err != nil {
+		t.Fatalf("Failed to create manifests directory: %v", err)
+	}
+
 	// Create project file
 	projectFile := filepath.Join(servoDir, "project.yaml")
 	projectContent := `default_session: default
@@ -54,12 +60,19 @@ mcp_servers:
 		t.Fatalf("Failed to create project file: %v", err)
 	}
 
+	// Create active session file
+	activeSessionFile := filepath.Join(servoDir, "active_session")
+	if err := os.WriteFile(activeSessionFile, []byte("default"), 0644); err != nil {
+		t.Fatalf("Failed to create active session file: %v", err)
+	}
+
 	// Create session file
 	sessionFile := filepath.Join(servoDir, "sessions", "default", "session.yaml")
 	sessionContent := `name: default
-is_default: true
-manifests:
-  - test-server
+description: ""
+created_at: 2024-01-01T00:00:00Z
+volume_path: ""
+active: true
 `
 	if err := os.WriteFile(sessionFile, []byte(sessionContent), 0644); err != nil {
 		t.Fatalf("Failed to create session file: %v", err)
@@ -78,7 +91,7 @@ env:
 	}
 
 	// Create test manifest
-	manifestFile := filepath.Join(servoDir, "sessions", "default", "test-server.yaml")
+	manifestFile := filepath.Join(servoDir, "sessions", "default", "manifests", "test-server.servo")
 	testManifest := &pkg.ServoDefinition{
 		ServoVersion: "1.0",
 		Name:         "test-server",

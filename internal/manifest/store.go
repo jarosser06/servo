@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/servo/servo/internal/mcp"
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -28,7 +29,7 @@ func NewStore(sessionDir string, parser *mcp.Parser) *Store {
 func (s *Store) StoreManifest(serverName, source string) error {
 	// Create manifests directory
 	manifestDir := filepath.Join(s.sessionDir, "manifests")
-	if err := os.MkdirAll(manifestDir, 0755); err != nil {
+	if err := utils.EnsureDirectoryStructure([]string{manifestDir}); err != nil {
 		return fmt.Errorf("failed to create manifests directory: %w", err)
 	}
 
@@ -124,5 +125,5 @@ func (s *Store) writeManifest(filePath string, manifest *pkg.ServoDefinition, so
 
 	content += yamlContent
 
-	return os.WriteFile(filePath, []byte(content), 0644)
+	return utils.WriteFileWithDir(filePath, []byte(content), 0644)
 }

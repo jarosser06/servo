@@ -2,6 +2,7 @@ package commands
 
 import (
 	"encoding/json"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"strings"
@@ -447,4 +448,401 @@ func setupInstallTestProject(t *testing.T) error {
 	}
 
 	return os.WriteFile(".servo/sessions/default/session.yaml", sessionData, 0644)
+}
+
+func TestInstallCommand_ClientValidation(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_client_validation_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create test .servo file
+	mockServoContent := `servo_version: "1.0"
+name: "client-test-server"
+version: "1.0.0"
+description: "Test client validation"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "test_server"]`
+
+	if err := os.WriteFile("client-test.servo", []byte(mockServoContent), 0644); err != nil {
+		t.Fatalf("Failed to create servo file: %v", err)
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Test with invalid clients - should filter out invalid ones
+	args := []string{"client-test.servo", "--clients", "vscode,invalid-client,claude-code,another-invalid"}
+	if err := cmd.Execute(args); err != nil {
+		t.Fatalf("Install command should succeed with mixed valid/invalid clients: %v", err)
+	}
+
+	// Verify only valid client configs were generated
+	expectedConfigs := map[string]bool{
+		".vscode/mcp.json": true,
+		".mcp.json":        true,
+	}
+
+	for configPath, shouldExist := range expectedConfigs {
+		_, err := os.Stat(configPath)
+		if shouldExist && os.IsNotExist(err) {
+			t.Errorf("Expected config file not generated: %s", configPath)
+		}
+	}
+}
+
+func TestInstallCommand_ForceUpdate(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_force_update_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create test .servo file
+	mockServoContent := `servo_version: "1.0"
+name: "update-test-server"
+version: "1.0.0"
+description: "Test force update"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "test_server"]`
+
+	if err := os.WriteFile("update-test.servo", []byte(mockServoContent), 0644); err != nil {
+		t.Fatalf("Failed to create servo file: %v", err)
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Install first time
+	args := []string{"update-test.servo", "--clients", "vscode"}
+	if err := cmd.Execute(args); err != nil {
+		t.Fatalf("Initial install failed: %v", err)
+	}
+
+	// Modify the servo file
+	updatedContent := `servo_version: "1.0"
+name: "update-test-server"
+version: "2.0.0"
+description: "Updated test force update"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "updated_test_server"]
+  environment:
+    NEW_VAR: "added_in_update"`
+
+	if err := os.WriteFile("update-test.servo", []byte(updatedContent), 0644); err != nil {
+		t.Fatalf("Failed to update servo file: %v", err)
+	}
+
+	// Try to install again with force update
+	if err := cmd.ExecuteWithOptions(args, []string{"vscode"}, "default", true); err != nil {
+		t.Fatalf("Force update install failed: %v", err)
+	}
+
+	// Verify updated manifest was stored
+	manifestPath := ".servo/sessions/default/manifests/update-test-server.servo"
+	data, err := os.ReadFile(manifestPath)
+	if err != nil {
+		t.Fatalf("Failed to read updated manifest: %v", err)
+	}
+
+	var manifest pkg.ServoDefinition
+	if err := yaml.Unmarshal(data, &manifest); err != nil {
+		t.Fatalf("Failed to parse updated manifest: %v", err)
+	}
+
+	if manifest.Version != "2.0.0" {
+		t.Errorf("Expected updated version '2.0.0', got %s", manifest.Version)
+	}
+
+	if manifest.Server.Environment == nil || manifest.Server.Environment["NEW_VAR"] != "added_in_update" {
+		t.Error("Expected NEW_VAR environment variable to be added in update")
+	}
+}
+
+func TestInstallCommand_ServerNameExtraction(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_name_extraction_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create test servo files with different names
+	testFiles := map[string]string{
+		"test-server.servo": `servo_version: "1.0"
+name: "extraction-test-server"
+version: "1.0.0"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "test"]`,
+		"./another-test.servo": `servo_version: "1.0"
+name: "another-server"
+version: "1.0.0"
+
+server:
+  transport: "stdio"
+  command: "node"
+  args: ["index.js"]`,
+	}
+
+	for filename, content := range testFiles {
+		if err := os.WriteFile(filename, []byte(content), 0644); err != nil {
+			t.Fatalf("Failed to create test file %s: %v", filename, err)
+		}
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Test file-based extraction
+	testCases := []struct {
+		source       string
+		expectedName string
+		shouldFail   bool
+	}{
+		{"test-server.servo", "extraction-test-server", false},
+		{"./another-test.servo", "another-server", false},
+		{"nonexistent.servo", "", true},
+		{"invalid-source-without-extension", "invalid-source-without-extension", false}, // Command uses source as name
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("extract_%s", strings.ReplaceAll(tc.source, "/", "_")), func(t *testing.T) {
+			name, err := cmd.extractServerName(tc.source)
+
+			if tc.shouldFail {
+				if err == nil {
+					t.Errorf("Expected error for source %s, but got none", tc.source)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for source %s: %v", tc.source, err)
+				}
+				if name != tc.expectedName {
+					t.Errorf("Expected name %s for source %s, got %s", tc.expectedName, tc.source, name)
+				}
+			}
+		})
+	}
+}
+
+func TestInstallCommand_SessionValidation(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_session_validation_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create test .servo file
+	mockServoContent := `servo_version: "1.0"
+name: "session-validation-server"
+version: "1.0.0"
+description: "Test session validation"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "test_server"]`
+
+	if err := os.WriteFile("session-test.servo", []byte(mockServoContent), 0644); err != nil {
+		t.Fatalf("Failed to create servo file: %v", err)
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Try to install to non-existent session - should fail
+	args := []string{"session-test.servo"}
+	err = cmd.ExecuteWithOptions(args, []string{"vscode"}, "nonexistent-session", false)
+	if err == nil {
+		t.Error("Expected error when installing to nonexistent session")
+	}
+
+	// Verify error message mentions session
+	if !strings.Contains(err.Error(), "session") {
+		t.Errorf("Expected error message to mention session, got: %v", err)
+	}
+}
+
+func TestInstallCommand_EmptyClients(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_empty_clients_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create test .servo file
+	mockServoContent := `servo_version: "1.0"
+name: "no-clients-server"
+version: "1.0.0"
+description: "Test with no clients"
+
+server:
+  transport: "stdio"
+  command: "python"
+  args: ["-m", "test_server"]`
+
+	if err := os.WriteFile("no-clients.servo", []byte(mockServoContent), 0644); err != nil {
+		t.Fatalf("Failed to create servo file: %v", err)
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Install without specifying clients - should use project defaults
+	args := []string{"no-clients.servo"}
+	if err := cmd.Execute(args); err != nil {
+		t.Fatalf("Install command failed: %v", err)
+	}
+
+	// Verify project default client (vscode) config was generated
+	vscodeConfigPath := ".vscode/mcp.json"
+	if _, err := os.Stat(vscodeConfigPath); os.IsNotExist(err) {
+		t.Errorf("Default VSCode config not generated: %s", vscodeConfigPath)
+	}
+}
+
+func TestInstallCommand_ErrorHandling(t *testing.T) {
+	// Setup temporary directory
+	tempDir, err := ioutil.TempDir("", "servo_error_handling_test_")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	// Change to temp directory
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tempDir)
+
+	// Initialize project structure
+	if err := setupInstallTestProject(t); err != nil {
+		t.Fatalf("Failed to setup project: %v", err)
+	}
+
+	// Create command
+	parser := mcp.NewParser()
+	validator := mcp.NewValidator()
+	cmd := NewInstallCommand(parser, validator)
+
+	// Test error cases
+	testCases := []struct {
+		name        string
+		args        []string
+		expectError bool
+		errorText   string
+	}{
+		{
+			name:        "no arguments",
+			args:        []string{},
+			expectError: true,
+			errorText:   "source is required",
+		},
+		{
+			name:        "nonexistent file",
+			args:        []string{"nonexistent.servo"},
+			expectError: true,
+			errorText:   "failed to",
+		},
+		{
+			name:        "missing servo extension", 
+			args:        []string{"invalid-file.txt"},
+			expectError: true, // Command fails when file doesn't exist
+			errorText:   "failed to",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := cmd.Execute(tc.args)
+
+			if tc.expectError {
+				if err == nil {
+					t.Errorf("Expected error for test case %s, but got none", tc.name)
+				} else if !strings.Contains(err.Error(), tc.errorText) {
+					t.Errorf("Expected error containing '%s', got: %v", tc.errorText, err)
+				}
+			} else {
+				if err != nil {
+					t.Errorf("Unexpected error for test case %s: %v", tc.name, err)
+				}
+			}
+		})
+	}
 }

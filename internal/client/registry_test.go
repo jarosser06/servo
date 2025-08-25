@@ -3,6 +3,7 @@ package client
 import (
 	"testing"
 
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -49,7 +50,7 @@ func TestRegistry_Register(t *testing.T) {
 	client := &MockClient{
 		name:        "test-client",
 		description: "Test client",
-		platforms:   []string{"linux", "darwin"},
+		platforms:   []string{utils.PlatformLinux, utils.PlatformDarwin},
 	}
 
 	err := registry.Register(client)

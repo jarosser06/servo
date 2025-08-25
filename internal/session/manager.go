@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/servo/servo/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -396,27 +397,16 @@ func (m *Manager) getSessionDir(name string) string {
 func (m *Manager) createSessionDirectories(name string) error {
 	sessionDir := m.getSessionDir(name)
 
-	// Create main session directory
-	if err := os.MkdirAll(sessionDir, 0755); err != nil {
-		return err
+	// Create all required directories
+	dirs := []string{
+		sessionDir,
+		filepath.Join(sessionDir, "manifests"), // Server manifests (.servo files)
+		filepath.Join(sessionDir, "config"),    // User configuration overrides
+		filepath.Join(sessionDir, "volumes"),   // Default Docker volumes
+		filepath.Join(sessionDir, "logs"),      // Session-specific logs
 	}
-
-	// Create subdirectories for new manifest-based architecture
-	subdirs := []string{
-		"manifests", // Server manifests (.servo files)
-		"config",    // User configuration overrides
-		"volumes",   // Default Docker volumes
-		"logs",      // Session-specific logs
-	}
-
-	for _, subdir := range subdirs {
-		dir := filepath.Join(sessionDir, subdir)
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return err
-		}
-	}
-
-	return nil
+	
+	return utils.EnsureDirectoryStructure(dirs)
 }
 
 // SaveSession saves a session to its appropriate file location
@@ -429,12 +419,7 @@ func (m *Manager) saveSession(session *Session) error {
 	sessionDir := m.getSessionDir(session.Name)
 	sessionFile := filepath.Join(sessionDir, "session.yaml")
 
-	data, err := yaml.Marshal(session)
-	if err != nil {
-		return fmt.Errorf("failed to marshal session: %w", err)
-	}
-
-	if err := os.WriteFile(sessionFile, data, 0644); err != nil {
+	if err := utils.WriteYAMLFile(sessionFile, session); err != nil {
 		return fmt.Errorf("failed to write session file: %w", err)
 	}
 
@@ -484,13 +469,7 @@ func (m *Manager) Rename(oldName, newName string) error {
 	oldSession.Name = newName
 	newSessionFile := filepath.Join(newSessionDir, "session.yaml")
 
-	data, err := yaml.Marshal(oldSession)
-	if err != nil {
-		os.RemoveAll(newSessionDir)
-		return fmt.Errorf("failed to marshal updated session: %w", err)
-	}
-
-	if err := os.WriteFile(newSessionFile, data, 0644); err != nil {
+	if err := utils.WriteYAMLFile(newSessionFile, oldSession); err != nil {
 		os.RemoveAll(newSessionDir)
 		return fmt.Errorf("failed to write updated session file: %w", err)
 	}

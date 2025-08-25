@@ -3,18 +3,20 @@ package commands
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"strings"
 
 	"github.com/servo/servo/internal/config"
 	"github.com/servo/servo/internal/project"
+	"github.com/servo/servo/internal/registry"
 	"github.com/servo/servo/internal/session"
+	"github.com/servo/servo/pkg"
 )
 
 // WorkCommand handles starting the development environment
 type WorkCommand struct {
 	projectManager *project.Manager
 	sessionManager *session.Manager
+	clientRegistry pkg.ClientRegistry
 }
 
 // NewWorkCommand creates a new work command
@@ -27,6 +29,7 @@ func NewWorkCommand() *WorkCommand {
 	return &WorkCommand{
 		projectManager: project.NewManager(),
 		sessionManager: session.NewManager(servoDir),
+		clientRegistry: registry.GetDefaultRegistry(),
 	}
 }
 
@@ -103,23 +106,34 @@ func (c *WorkCommand) Execute(args []string) error {
 		fmt.Println()
 	}
 
-	// Step 3: Launch client if requested
+	// Step 3: Show launch commands if client requested
 	if shouldLaunchClient {
-		fmt.Printf("🖥️  Launching %s client...\n", client)
-		if err := c.launchClient(client); err != nil {
-			fmt.Printf("⚠️  Failed to launch %s: %v\n", client, err)
-			fmt.Printf("💡 You can manually launch %s and open this project\n", client)
+		launchCmd := c.getLaunchCommand(client)
+		if launchCmd != "" {
+			fmt.Printf("# Launch command for %s:\n", client)
+			fmt.Println(launchCmd)
 		} else {
-			fmt.Printf("✅ %s launched successfully\n", client)
+			fmt.Printf("# %s client not found or unsupported\n", client)
 		}
 	} else {
-		fmt.Println("💡 Development environment is ready!")
-		fmt.Println("   Next steps:")
-		fmt.Println("   • Open VSCode: servo work --vscode")
-		fmt.Println("   • Use Claude Code: servo work --claude-code")
-		fmt.Println("   • Or manually open your preferred client")
-		fmt.Println()
-		fmt.Println("   The devcontainer will automatically start services when opened.")
+		fmt.Println("# Development environment is ready!")
+		fmt.Println("# Available launch commands:")
+		
+		// Get current working directory for launch commands
+		pwd, err := os.Getwd()
+		if err != nil {
+			pwd = "."
+		}
+		
+		// Show available clients with their launch commands
+		clients := c.clientRegistry.List()
+		for _, client := range clients {
+			if client.IsInstalled() {
+				launchCmd := client.GetLaunchCommand(pwd)
+				fmt.Printf("# %s:\n%s\n", client.Name(), launchCmd)
+				fmt.Println()
+			}
+		}
 	}
 
 	return nil
@@ -143,48 +157,23 @@ func (c *WorkCommand) generateConfigurations() error {
 	return nil
 }
 
-// launchClient launches the specified client
-func (c *WorkCommand) launchClient(clientName string) error {
-	switch clientName {
-	case "vscode":
-		return c.launchVSCode()
-	case "claude-code":
-		return c.launchClaudeCode()
-	default:
-		return fmt.Errorf("unsupported client: %s", clientName)
+// getLaunchCommand returns the command to launch the specified client
+func (c *WorkCommand) getLaunchCommand(clientName string) string {
+	client, err := c.clientRegistry.Get(clientName)
+	if err != nil {
+		return "" // Client not found
 	}
-}
-
-// launchVSCode launches VSCode with devcontainer
-func (c *WorkCommand) launchVSCode() error {
-	// Try different VSCode command variations
-	commands := []string{"code", "/usr/local/bin/code", "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code"}
-
-	for _, command := range commands {
-		if c.commandExists(command) {
-			cmd := exec.Command(command, ".")
-			if err := cmd.Start(); err == nil {
-				return nil
-			}
-		}
+	
+	if !client.IsInstalled() {
+		return "" // Client not installed
 	}
-
-	return fmt.Errorf("VSCode not found in PATH")
-}
-
-// launchClaudeCode launches Claude Code CLI
-func (c *WorkCommand) launchClaudeCode() error {
-	if !c.commandExists("claude") {
-		return fmt.Errorf("Claude Code CLI not found - install from https://claude.ai/code")
+	
+	// Get current working directory for launch command
+	pwd, err := os.Getwd()
+	if err != nil {
+		pwd = "."
 	}
-
-	cmd := exec.Command("claude")
-	cmd.Dir = "."
-	return cmd.Start()
+	
+	return client.GetLaunchCommand(pwd)
 }
 
-// Helper methods
-func (c *WorkCommand) commandExists(command string) bool {
-	_, err := exec.LookPath(command)
-	return err == nil
-}

@@ -5,9 +5,6 @@ import (
 	"os"
 	"strings"
 
-	"github.com/servo/servo/clients/claude_code"
-	"github.com/servo/servo/clients/cursor"
-	"github.com/servo/servo/clients/vscode"
 	"github.com/servo/servo/internal/client"
 	"github.com/servo/servo/internal/project"
 	"github.com/servo/servo/pkg"
@@ -21,16 +18,11 @@ type StatusCommand struct {
 
 // NewStatusCommand creates a new status command
 func NewStatusCommand() *StatusCommand {
-	clientRegistry := client.NewRegistry()
-	
-	// Register built-in clients
-	clientRegistry.Register(claude_code.New())
-	clientRegistry.Register(vscode.New())
-	clientRegistry.Register(cursor.New())
+	deps := NewBaseCommandDependencies()
 	
 	return &StatusCommand{
-		projectManager: project.NewManager(),
-		clientRegistry: clientRegistry,
+		projectManager: deps.ProjectManager,
+		clientRegistry: deps.ClientRegistry,
 	}
 }
 

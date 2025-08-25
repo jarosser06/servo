@@ -6,13 +6,10 @@ import (
 
 	"github.com/urfave/cli/v2"
 
-	"github.com/servo/servo/clients/claude_code"
-	"github.com/servo/servo/clients/cursor"
-	"github.com/servo/servo/clients/vscode"
 	"github.com/servo/servo/internal/cli/commands"
-	"github.com/servo/servo/internal/client"
 	"github.com/servo/servo/internal/mcp"
 	"github.com/servo/servo/internal/project"
+	"github.com/servo/servo/internal/registry"
 	"github.com/servo/servo/internal/session"
 )
 
@@ -25,14 +22,9 @@ func NewApp(version string) (*cli.App, error) {
 	// Config generation is handled by ConfigGeneratorManager in individual commands
 	// Secrets management is handled by SecretsCommand directly with project integration
 
-	clientRegistry := client.NewRegistry()
+	clientRegistry := registry.GetDefaultRegistry()
 	parser := mcp.NewParser()
 	validator := mcp.NewValidator()
-
-	// Register built-in clients
-	clientRegistry.Register(claude_code.New())
-	clientRegistry.Register(vscode.New())
-	clientRegistry.Register(cursor.New())
 
 	app := &cli.App{
 		Name:        "servo",

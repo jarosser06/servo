@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"runtime"
 	"testing"
 
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
 )
 
@@ -15,7 +15,7 @@ func TestBaseClientInfo(t *testing.T) {
 	info := BaseClientInfo{
 		Name:        "test",
 		Description: "Test Client",
-		Platforms:   []string{"darwin", "linux"},
+		Platforms:   []string{utils.PlatformDarwin, utils.PlatformLinux},
 	}
 
 	if info.Name != "test" {
@@ -32,20 +32,15 @@ func TestBaseClientInfo(t *testing.T) {
 }
 
 func TestIsPlatformSupportedForPlatforms(t *testing.T) {
-	// Test current platform support based on runtime.GOOS
-	supported := IsPlatformSupportedForPlatforms([]string{"darwin", "linux"})
+	// Test current platform support
+	testPlatforms := []string{utils.PlatformDarwin, utils.PlatformLinux}
+	supported := IsPlatformSupportedForPlatforms(testPlatforms)
 
 	// Should return true if current platform is in the list, false otherwise
-	expectedSupported := false
-	for _, platform := range []string{"darwin", "linux"} {
-		if platform == runtime.GOOS {
-			expectedSupported = true
-			break
-		}
-	}
+	expectedSupported := utils.IsPlatformSupported(testPlatforms)
 
 	if supported != expectedSupported {
-		t.Errorf("expected platform support %v for %s, got %v", expectedSupported, runtime.GOOS, supported)
+		t.Errorf("expected platform support %v for %s, got %v", expectedSupported, utils.CurrentPlatform(), supported)
 	}
 }
 

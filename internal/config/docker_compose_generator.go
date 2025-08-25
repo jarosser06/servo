@@ -2,13 +2,12 @@ package config
 
 import (
 	"fmt"
-	"os"
 	"strings"
 
 	"github.com/servo/servo/internal/override"
 	"github.com/servo/servo/internal/project"
+	"github.com/servo/servo/internal/utils"
 	"github.com/servo/servo/pkg"
-	"gopkg.in/yaml.v3"
 )
 
 // DockerComposeGenerator handles docker-compose.yml generation
@@ -61,17 +60,12 @@ func (g *DockerComposeGenerator) Generate() error {
 	}
 
 	// Create .devcontainer directory
-	if err := os.MkdirAll(".devcontainer", 0755); err != nil {
+	if err := utils.EnsureDirectoryStructure([]string{".devcontainer"}); err != nil {
 		return fmt.Errorf("failed to create .devcontainer directory: %w", err)
 	}
 
 	// Write docker-compose.yml
-	data, err := yaml.Marshal(finalConfig)
-	if err != nil {
-		return fmt.Errorf("failed to marshal docker-compose config: %w", err)
-	}
-
-	return os.WriteFile(".devcontainer/docker-compose.yml", data, 0644)
+	return utils.WriteYAMLFile(".devcontainer/docker-compose.yml", finalConfig)
 }
 
 // buildBaseDockerComposeConfig creates the base infrastructure-only docker-compose configuration

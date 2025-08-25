@@ -5,6 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/servo/servo/internal/utils"
+	"github.com/servo/servo/pkg"
 )
 
 func setupTestClient(t *testing.T) (*Client, string) {
@@ -34,7 +37,7 @@ func TestClient_SupportedPlatforms(t *testing.T) {
 	client := New()
 	platforms := client.SupportedPlatforms()
 
-	expectedPlatforms := []string{"darwin", "linux", "windows"}
+	expectedPlatforms := utils.DesktopPlatforms
 	if len(platforms) != len(expectedPlatforms) {
 		t.Errorf("expected %d platforms, got %d", len(expectedPlatforms), len(platforms))
 	}
@@ -291,5 +294,107 @@ func TestClient_ValidateConfig_ErrorPath(t *testing.T) {
 	err := client.ValidateConfig("global")
 	if err == nil {
 		t.Error("ValidateConfig should fail for invalid scope")
+	}
+}
+
+func TestClient_GenerateConfig(t *testing.T) {
+	tmpDir := t.TempDir()
+	
+	// Change to temp directory for this test
+	originalWd, _ := os.Getwd()
+	defer os.Chdir(originalWd)
+	os.Chdir(tmpDir)
+	
+	// Use default client since GenerateConfig uses .cursor relative to current dir
+	client := New()
+
+	// Test manifests with secrets
+	manifests := []pkg.ServoDefinition{
+		{
+			Name: "test-server",
+			Server: pkg.Server{
+				Command: "python",
+				Args:    []string{"-m", "server", "--api-key", "${SERVO_SECRET:api_key}"},
+				Environment: map[string]string{
+					"DATABASE_URL": "${SERVO_SECRET:db_url}",
+					"DEBUG":        "true",
+				},
+			},
+		},
+	}
+
+	// Mock secrets provider
+	secretsProvider := func(key string) (string, error) {
+		secrets := map[string]string{
+			"SERVO_SECRET:api_key": "test-api-key-123",
+			"SERVO_SECRET:db_url":  "postgresql://user:pass@localhost/db",
+		}
+		return secrets[key], nil
+	}
+
+	// Generate config
+	err := client.GenerateConfig(manifests, secretsProvider)
+	if err != nil {
+		t.Fatalf("GenerateConfig failed: %v", err)
+	}
+
+	// Verify config file was created
+	configPath := ".cursor/mcp.json"
+	if _, err := os.Stat(configPath); os.IsNotExist(err) {
+		t.Fatalf("Config file was not created at %s", configPath)
+	}
+
+	// Read and verify config content
+	configData, err := os.ReadFile(configPath)
+	if err != nil {
+		t.Fatalf("Failed to read generated config: %v", err)
+	}
+
+	var config map[string]interface{}
+	if err := json.Unmarshal(configData, &config); err != nil {
+		t.Fatalf("Failed to parse generated config: %v", err)
+	}
+
+	// Verify structure has mcpServers key (Cursor uses mcpServers format)
+	servers, exists := config["mcpServers"].(map[string]interface{})
+	if !exists {
+		t.Fatalf("Config should contain mcpServers key")
+	}
+
+	// Verify test-server configuration
+	testServer, exists := servers["test-server"].(map[string]interface{})
+	if !exists {
+		t.Fatalf("test-server not found in generated config")
+	}
+
+	if testServer["command"] != "python" {
+		t.Errorf("Expected command 'python', got '%v'", testServer["command"])
+	}
+
+	// Verify args expansion
+	args, ok := testServer["args"].([]interface{})
+	if !ok {
+		t.Fatalf("Expected args to be array")
+	}
+
+	expectedArgs := []string{"-m", "server", "--api-key", "test-api-key-123"}
+	for i, expectedArg := range expectedArgs {
+		if i < len(args) && args[i] != expectedArg {
+			t.Errorf("Expected arg[%d] '%s', got '%v'", i, expectedArg, args[i])
+		}
+	}
+
+	// Verify environment variables expansion (uses 'env' field)
+	env, ok := testServer["env"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("Expected env to be map")
+	}
+
+	if env["DATABASE_URL"] != "postgresql://user:pass@localhost/db" {
+		t.Errorf("Expected DATABASE_URL to be expanded, got '%v'", env["DATABASE_URL"])
+	}
+
+	if env["DEBUG"] != "true" {
+		t.Errorf("Expected DEBUG to be 'true', got '%v'", env["DEBUG"])
 	}
 }

@@ -140,3 +140,4 @@ func (r *Registry) GetInstalledClients() []pkg.Client {
 
 	return installed
 }
+

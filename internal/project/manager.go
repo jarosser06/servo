@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/servo/servo/internal/utils"
 	"gopkg.in/yaml.v3"
 )
 
@@ -63,13 +64,9 @@ func (m *Manager) projectFileExists() bool {
 func (m *Manager) createProjectDirectories() error {
 	servoDir := m.GetServoDir()
 
-	// Create main .servo directory
-	if err := os.MkdirAll(servoDir, 0755); err != nil {
-		return fmt.Errorf("failed to create .servo directory: %w", err)
-	}
-
-	// Create subdirectories
+	// Create all required directories
 	dirs := []string{
+		servoDir,
 		filepath.Join(servoDir, "config"), // Project-level config overrides
 		filepath.Join(servoDir, "sessions"),
 		filepath.Join(servoDir, "sessions", "default"),
@@ -78,10 +75,8 @@ func (m *Manager) createProjectDirectories() error {
 		filepath.Join(servoDir, "sessions", "default", "volumes"),
 	}
 
-	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create directory %s: %w", dir, err)
-		}
+	if err := utils.EnsureDirectoryStructure(dirs); err != nil {
+		return fmt.Errorf("failed to create project directories: %w", err)
 	}
 
 	// Create .gitignore file
@@ -101,7 +96,7 @@ sessions/*/logs/
 .DS_Store
 Thumbs.db
 `
-	if err := os.WriteFile(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
+	if err := utils.WriteFileWithDir(gitignorePath, []byte(gitignoreContent), 0644); err != nil {
 		return fmt.Errorf("failed to create .gitignore: %w", err)
 	}
 
@@ -112,12 +107,7 @@ Thumbs.db
 func (m *Manager) saveProject(project *Project) error {
 	projectFile := filepath.Join(m.GetServoDir(), "project.yaml")
 
-	data, err := yaml.Marshal(project)
-	if err != nil {
-		return fmt.Errorf("failed to marshal project: %w", err)
-	}
-
-	if err := os.WriteFile(projectFile, data, 0644); err != nil {
+	if err := utils.WriteYAMLFile(projectFile, project); err != nil {
 		return fmt.Errorf("failed to write project file: %w", err)
 	}
 
