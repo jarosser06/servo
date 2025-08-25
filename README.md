@@ -293,8 +293,7 @@ servo config set active_session development
 ```
 
 ### Secrets Management
-
-All secrets are base64-encoded and stored locally in `.servo/secrets.yaml`.
+All secrets are base64-encoded (not encrypted) and stored locally in `.servo/secrets.yaml`.
 
 #### `servo secrets list`
 List all configured secrets (names only, not values).
@@ -340,8 +339,9 @@ servo secrets delete <KEY>
 **Arguments:**
 - `KEY` - Secret name
 
+
 #### `servo secrets export`
-Export encrypted secrets to a file for backup.
+Export base64-encoded secrets to a file for backup.
 
 ```bash
 servo secrets export <OUTPUT_FILE>
@@ -351,7 +351,7 @@ servo secrets export <OUTPUT_FILE>
 - `OUTPUT_FILE` - Path to export file
 
 #### `servo secrets import`
-Import encrypted secrets from a backup file.
+Import base64-encoded secrets from a backup file.
 
 ```bash
 servo secrets import <INPUT_FILE>
@@ -410,7 +410,7 @@ servo validate https://github.com/user/repo.git
 my-project/                           # Your project root
 ├── .servo/                          # Servo project directory
 │   ├── project.yaml                 # Project configuration
-│   ├── secrets.enc                  # Encrypted secrets (local only)
+│   ├── secrets.enc                  # Encoded secrets (local only)
 │   ├── .gitignore                   # Ignores secrets and volumes
 │   └── sessions/                    # Session directories
 │       ├── default/                 # Default session
@@ -596,85 +596,10 @@ servo secrets set huggingface_token hf_...
 servo work
 ```
 
-## Troubleshooting
-
-### Common Issues
-
-**"Not in a servo project directory"**
-```bash
-# Initialize a new project:
-servo init my-project
-```
-
-**"Missing required secrets"**
-```bash
-# Check what's needed:
-servo status
-
-# Set missing secrets:
-servo secrets set <secret-name> <value>
-```
-
-**"No MCP clients detected"**
-```bash  
-# Check client detection:
-servo clients list
-
-# Install a supported client (VS Code, Claude Code, Cursor)
-```
-
-**"Failed to generate devcontainer"**
-```bash
-# Ensure Docker is running:
-docker --version
-
-# Check project configuration:
-servo validate ./path/to/server.servo
-```
-
-## Security
-
-### Secret Management
-- **Encoding**: Base64 encoding for basic obscurity (not cryptographic security)
-- **Storage**: Base64-encoded locally in `.servo/secrets.yaml` (never committed)
-- **Access**: Direct file access with 0600 permissions
-- **Team workflow**: Secrets declared in config but values stored locally
-
-### Container Security  
-- **Isolation**: Each project runs in isolated containers
-- **Networks**: Dedicated Docker networks per project
-- **Volumes**: Persistent data stored in project-local volumes
-- **Permissions**: Restricted file permissions on sensitive files
-
 ## Contributing
 
-We welcome contributions! Please see our [Contributing Guidelines](CONTRIBUTING.md).
-
-### Development Setup
-```bash
-git clone https://github.com/jarosser06/servo.git
-cd servo
-make build
-make test
-```
-
-### Testing
-```bash
-# Unit tests
-go test ./internal/...
-
-# Integration tests  
-go test ./test/...
-
-# Full integration (requires Docker)
-SERVO_FULL_INTEGRATION=1 go test ./test/...
-```
+See [Contributing Guidelines](CONTRIBUTING.md).
 
 ## License
 
 Apache License 2.0 - see [LICENSE](LICENSE) for details.
-
-## Support
-
-- 📖 [Documentation](docs/)
-- 🐛 [Issue Tracker](https://github.com/jarosser06/servo/issues)
